@@ -7,7 +7,7 @@ De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cart
 | Route | Doel | Toegang |
 | --- | --- | --- |
 | `/indoor` | Wedstrijden in de Cartouche Hockey Dome | Publiek, kioskweergave |
-| `/outdoor` | Veldindeling en buitenwedstrijden | Publiek, kioskweergave |
+| `/outdoor` | Veldindeling en buitenwedstrijden, met verticaal scrollende sponsorbanen | Publiek, kioskweergave |
 | `/sponsors` | Doorlopende sponsorcarrousel | Publiek, kioskweergave |
 | `/admin/login` | Better Auth-login | Publiek formulier |
 | `/admin` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |

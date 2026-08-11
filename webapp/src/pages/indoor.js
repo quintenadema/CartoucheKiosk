@@ -192,10 +192,6 @@ export default function HockeyGames() {
 						</div>
 					</div>
 
-					<Link href="/1" className="text-lg text-gray-400 hover:text-gray-600 transition-colors underline">
-						Duivesteyn →
-					</Link>
-
 					<img
 						src="qr.png"
 						alt="QR-code"

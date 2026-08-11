@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 setDefaultOptions({ locale: nl });
 
-const DESIGN_WIDTH = 1080;
+const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
 const REFRESH_INTERVAL_MS = 120000;
 const CLOCK_INTERVAL_MS = 30000;
@@ -168,7 +168,7 @@ function KioskStage({ children }) {
 		<div className="h-screen w-screen overflow-hidden bg-[linear-gradient(180deg,#071a12_0%,#0b291b_34%,#102f1f_100%)]">
 			<div className="flex h-full w-full items-center justify-center">
 				<div
-					className="overflow-hidden"
+					className="shrink-0 overflow-hidden"
 					style={{
 						width: DESIGN_WIDTH,
 						height: DESIGN_HEIGHT,
@@ -375,8 +375,62 @@ function UtilityCard({ title, muted = false }) {
 	);
 }
 
+function SponsorRail({ sponsors, reverse = false }) {
+	if (sponsors.length === 0) {
+		return (
+			<aside className="flex h-full items-center justify-center rounded-[24px] border border-white/[0.08] bg-white/[0.035]">
+				<span className="-rotate-90 whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.34em] text-white/30">
+					Onze sponsoren
+				</span>
+			</aside>
+		);
+	}
+
+	const duration = Math.max(sponsors.length * 7, 70);
+
+	return (
+		<aside
+			aria-label="Sponsoren van HC Cartouche"
+			className="relative h-full overflow-hidden rounded-[24px] border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.065),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+			style={{
+				maskImage: "linear-gradient(to bottom, transparent 0, black 5%, black 95%, transparent 100%)",
+				WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 5%, black 95%, transparent 100%)",
+			}}
+		>
+			<div
+				className="flex flex-col will-change-transform"
+				style={{
+					animation: `${reverse ? "outdoor-sponsors-down" : "outdoor-sponsors-up"} ${duration}s linear infinite`,
+				}}
+			>
+				{[0, 1].map((copy) => (
+					<div key={copy} className="flex flex-col gap-3 pb-3" aria-hidden={copy === 1}>
+						{sponsors.map((sponsor) => (
+							<div
+								key={`${copy}-${sponsor.id}`}
+								className="flex h-[132px] shrink-0 flex-col items-center justify-center rounded-[17px] border border-[#dfe5dd] bg-[#f8faf6] px-4 py-3 text-center shadow-[0_12px_30px_rgba(0,0,0,0.2)]"
+							>
+								<img
+									src={sponsor.image}
+									alt={sponsor.name}
+									className="max-h-[80px] w-full object-contain"
+									decoding="async"
+								/>
+								<span className="mt-2 line-clamp-1 w-full text-[11px] font-semibold tracking-wide text-[#476052]">
+									{sponsor.name}
+								</span>
+							</div>
+						))}
+					</div>
+				))}
+			</div>
+		</aside>
+	);
+}
+
 export default function OutdoorGames() {
 	const [games, setGames] = useState([]);
+	const [sponsors, setSponsors] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [lastUpdated, setLastUpdated] = useState(null);
@@ -417,6 +471,33 @@ export default function OutdoorGames() {
 		return () => window.clearInterval(clockInterval);
 	}, []);
 
+	useEffect(() => {
+		let isActive = true;
+
+		const syncSponsors = async () => {
+			try {
+				const response = await fetch("/api/sponsors");
+				if (!response.ok) throw new Error(`Failed to fetch sponsors: ${response.status}`);
+
+				const data = await response.json();
+				if (isActive) {
+					setSponsors(Array.isArray(data?.sponsors) ? data.sponsors : []);
+				}
+			} catch (error) {
+				console.error("Failed to fetch outdoor sponsors", error);
+				if (isActive) setSponsors([]);
+			}
+		};
+
+		syncSponsors();
+		const refreshInterval = window.setInterval(syncSponsors, 15 * 60 * 1000);
+
+		return () => {
+			isActive = false;
+			window.clearInterval(refreshInterval);
+		};
+	}, []);
+
 	const assignedMatches = games.filter((game) => game.field);
 	const unassignedMatches = games.filter((game) => !game.field);
 	const liveFieldCount = FIELD_LAYOUT.filter(
@@ -428,61 +509,92 @@ export default function OutdoorGames() {
 	const totalScheduledOnFields = FIELD_LAYOUT.reduce((total, fieldConfig) => {
 		return total + pickFieldMatches(assignedMatches, fieldConfig).allMatches.length;
 	}, 0);
+	const leftSponsors = sponsors.filter((_, index) => index % 2 === 0);
+	const rightSponsors = sponsors.filter((_, index) => index % 2 === 1);
 
 	return (
 		<>
 			<Head>
 				<title>Cartouche Outdoor</title>
+				<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 			</Head>
 
 			<KioskStage>
-				<div className="flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#071a12_0%,#0b291b_34%,#102f1f_100%)] px-5 py-5 text-white">
-					<header className="flex items-center justify-between gap-4">
-						
-						<div className="flex items-center gap-3">
-							<div className="rounded-[12px] border border-white/[0.12] bg-white p-1">
-								<Image src="/cartouche.png" alt="Cartouche logo" width={40} height={40} />
-							</div>
-							<h1 className="text-[32px] font-semibold leading-none">
-								Sportpark Duivesteyn
-							</h1>
+				<div className="flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#071a12_0%,#0b291b_34%,#102f1f_100%)] px-[34px] py-5 text-white">
+					<header className="grid grid-cols-[238px_minmax(0,1fr)_238px] gap-[26px]">
+						<div className="flex items-center justify-center text-[11px] font-semibold uppercase tracking-[0.34em] text-white/45">
+							Partners
 						</div>
 
-						<div className="mt-2 flex flex-col gap-1 text-[13px] text-white/[0.76]">
-							<span className="flex items-center gap-1.5">
-								<MapPinned className="h-4 w-4" />
-								Sportpark DuiveSteyn
-							</span>
-							<span className="flex items-center gap-1.5">
-								<Clock3 className="h-4 w-4" />
-								{format(currentTime, "EEEE d MMMM • HH:mm")}
-							</span>
+						<div className="flex items-center justify-between gap-4">
+						
+							<div className="flex items-center gap-3">
+								<div className="rounded-[12px] border border-white/[0.12] bg-white p-1">
+									<Image src="/cartouche.png" alt="Cartouche logo" width={40} height={40} />
+								</div>
+								<h1 className="text-[32px] font-semibold leading-none">
+									Sportpark Duivesteyn
+								</h1>
+							</div>
+
+							<div className="mt-2 flex flex-col gap-1 text-[13px] text-white/[0.76]">
+								<span className="flex items-center gap-1.5">
+									<MapPinned className="h-4 w-4" />
+									Sportpark DuiveSteyn
+								</span>
+								<span className="flex items-center gap-1.5">
+									<Clock3 className="h-4 w-4" />
+									{format(currentTime, "EEEE d MMMM • HH:mm")}
+								</span>
+							</div>
+						</div>
+
+						<div className="flex items-center justify-center text-[11px] font-semibold uppercase tracking-[0.34em] text-white/45">
+							Partners
 						</div>
 					</header>
 
-					<main className="mt-4 grid flex-1 grid-cols-3 gap-8 overflow-hidden">
-						<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-8">
-							<FieldCard fieldConfig={FIELD_LAYOUT[0]} matches={assignedMatches} />
-							<FieldCard fieldConfig={FIELD_LAYOUT[1]} matches={assignedMatches} />
-							<FieldCard fieldConfig={FIELD_LAYOUT[2]} matches={assignedMatches} />
+					<main className="mt-4 grid min-h-0 flex-1 grid-cols-[238px_minmax(0,1fr)_238px] gap-[26px] overflow-hidden">
+						<SponsorRail sponsors={leftSponsors} />
+
+						<div className="grid min-w-0 grid-cols-3 gap-7">
+							<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
+								<FieldCard fieldConfig={FIELD_LAYOUT[0]} matches={assignedMatches} />
+								<FieldCard fieldConfig={FIELD_LAYOUT[1]} matches={assignedMatches} />
+								<FieldCard fieldConfig={FIELD_LAYOUT[2]} matches={assignedMatches} />
+							</div>
+
+							<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
+								<FieldCard fieldConfig={FIELD_LAYOUT[3]} matches={assignedMatches} />
+
+								<UtilityCard title="Clubhuis" />
+
+								<UtilityCard title="Fietsenstalling" muted />
+							</div>
+
+							<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
+								<FieldCard fieldConfig={FIELD_LAYOUT[4]} matches={assignedMatches} />
+								<FieldCard fieldConfig={FIELD_LAYOUT[5]} matches={assignedMatches} />
+								<FieldCard fieldConfig={FIELD_LAYOUT[6]} matches={assignedMatches} />
+							</div>
 						</div>
 
-						<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-8">
-							<FieldCard fieldConfig={FIELD_LAYOUT[3]} matches={assignedMatches} />
-
-							<UtilityCard title="Clubhuis" />
-
-							<UtilityCard title="Fietsenstalling" muted />
-						</div>
-
-						<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-8">
-							<FieldCard fieldConfig={FIELD_LAYOUT[4]} matches={assignedMatches} />
-							<FieldCard fieldConfig={FIELD_LAYOUT[5]} matches={assignedMatches} />
-							<FieldCard fieldConfig={FIELD_LAYOUT[6]} matches={assignedMatches} />
-						</div>
+						<SponsorRail sponsors={rightSponsors} reverse />
 					</main>
 				</div>
 			</KioskStage>
+
+			<style jsx global>{`
+				@keyframes outdoor-sponsors-up {
+					from { transform: translateY(0); }
+					to { transform: translateY(-50%); }
+				}
+
+				@keyframes outdoor-sponsors-down {
+					from { transform: translateY(-50%); }
+					to { transform: translateY(0); }
+				}
+			`}</style>
 		</>
 	);
 }
