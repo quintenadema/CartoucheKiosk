@@ -1,0 +1,15 @@
+#!/bin/bash
+
+INTERVAL="$1"
+PROFILE_DIR="$2"
+
+while true
+do
+	sleep "${INTERVAL}"
+	if [ -n "${PROFILE_DIR}" ]
+	then
+		rm -rf "${PROFILE_DIR}/Cache" "${PROFILE_DIR}/Default/Cache" || true
+	else
+		rm -rf /home/pi/.cache/chromium/Default || true
+	fi
+done

@@ -1,0 +1,360 @@
+#!/bin/sh
+
+INI_FILE="/boot/firmware/kioskbrowser.ini"
+
+ini_get() {
+	get-ini "${INI_FILE}" "$@"
+}
+
+ini_list_sections() {
+	pattern="$1"
+	php -r '
+		$ini = parse_ini_file($argv[1], true, INI_SCANNER_NORMAL);
+		$pattern = $argv[2];
+		$sections = [];
+		foreach ($ini as $section => $values) {
+			if (preg_match("~{$pattern}~", $section)) {
+				$sections[] = $section;
+			}
+		}
+		natsort($sections);
+		foreach ($sections as $section) {
+			echo $section, PHP_EOL;
+		}
+	' "${INI_FILE}" "${pattern}" 2>/dev/null
+}
+
+first_connected_output() {
+	xrandr -q | awk '/ connected/{ print $1; exit }'
+}
+
+connected_output_by_index() {
+	index="$1"
+	xrandr -q | awk -v idx="${index}" '
+	/ connected/ {
+		if (i == idx) {
+			print $1;
+			exit;
+		}
+		i++;
+	}
+	'
+}
+
+output_geometry() {
+	output="$1"
+	xrandr -q | awk -v output="${output}" '
+	$1 == output && $2 == "connected" {
+		for (i = 3; i <= NF; i++) {
+			if ($i ~ /^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$/) {
+				print $i;
+				exit;
+			}
+		}
+	}
+	'
+}
+
+# display splash screen as Openbox background
+if [ -f /boot/firmware/splash.png ]; then
+   feh --bg-center /boot/firmware/splash.png
+fi
+
+VNC_ENABLED=$(ini_get vnc enabled 0)
+if [ "${VNC_ENABLED}" -eq 1 ]
+then
+	x11vnc -localhost &
+fi
+
+# move the cursor out of the way
+xdotool mousemove 0 0
+
+# disable blanking or configure user-defined blanking interval
+BLANKING=$(ini_get screen blanking_interval)
+if [ -n "${BLANKING}" ]
+then
+        xset s "${BLANKING}" # blank after n seconds
+else
+        xset s off # don't activate screensaver
+        xset -dpms # disable DPMS (Energy Star) features.
+        xset s noblank # don't blank the video device
+fi
+
+# hide mouse cursor after 1 second
+unclutter -idle 1 -root &
+
+# set a custom audio output device (if specified)
+AUDIO_DEVICE=$(ini_get audio device)
+if [ -n "${AUDIO_DEVICE}" ]
+then
+	echo "pcm.!default \"${AUDIO_DEVICE}\"" > /tmp/asoundrc
+fi
+
+# multi-screen setup (if specified)
+SCREEN_SECTIONS=$(ini_list_sections '^screen[0-9]+$')
+if [ -n "${SCREEN_SECTIONS}" ]
+then
+	OUTPUT_INDEX=0
+
+	for SECTION in ${SCREEN_SECTIONS}
+	do
+		OUTPUT=$(ini_get "${SECTION}" output)
+		if [ -z "${OUTPUT}" ]
+		then
+			OUTPUT=$(connected_output_by_index "${OUTPUT_INDEX}")
+			OUTPUT_INDEX=$((OUTPUT_INDEX + 1))
+		fi
+
+		if [ -z "${OUTPUT}" ]
+		then
+			echo "kiosk: ${SECTION} has no output and no auto-detected output available"
+			continue
+		fi
+
+		if ! xrandr -q | awk '/ connected/{print $1}' | grep -qx "${OUTPUT}"
+		then
+			echo "kiosk: output ${OUTPUT} for ${SECTION} is not connected"
+			continue
+		fi
+
+		MODE=$(ini_get "${SECTION}" mode)
+		CUSTOM_MODELINE=$(ini_get "${SECTION}" custom_modeline)
+		ROTATE=$(ini_get "${SECTION}" rotate)
+		POSITION=$(ini_get "${SECTION}" position)
+		PRIMARY=$(ini_get "${SECTION}" primary)
+
+		if [ -n "${POSITION}" ]
+		then
+			POSITION=$(printf '%s' "${POSITION}" | tr ',' 'x')
+		fi
+
+		set -- xrandr --output "${OUTPUT}" --auto
+		if [ -n "${POSITION}" ]
+		then
+			set -- "$@" --pos "${POSITION}"
+		fi
+		if [ -n "${ROTATE}" ]
+		then
+			set -- "$@" --rotate "${ROTATE}"
+		fi
+		if [ "${PRIMARY}" = "1" ]
+		then
+			set -- "$@" --primary
+		fi
+
+		if [ -n "${CUSTOM_MODELINE}" ]
+		then
+			MODE_NAME="custom-${SECTION}"
+			xrandr --newmode "${MODE_NAME}" ${CUSTOM_MODELINE} 2>/dev/null || true
+			xrandr --addmode "${OUTPUT}" "${MODE_NAME}" 2>/dev/null || true
+			set -- "$@" --mode "${MODE_NAME}"
+		elif [ -n "${MODE}" ]
+		then
+			set -- "$@" --mode "${MODE}"
+		fi
+
+		"$@"
+	done
+else
+	# set a custom resolution (if specified)
+	RESOLUTION=$(ini_get screen force_resolution)
+	if [ -n "${RESOLUTION}" ]
+	then
+		MONITOR=$(ini_get screen output)
+		if [ -z "${MONITOR}" ]
+		then
+			MONITOR=$(first_connected_output)
+		fi
+		if [ -n "${MONITOR}" ]
+		then
+			xrandr --output "${MONITOR}" --mode "${RESOLUTION}"
+		fi
+	fi
+
+	# set a custom modeline (if specified)
+	CUSTOM_MODELINE=$(ini_get screen custom_modeline)
+	if [ -n "${CUSTOM_MODELINE}" ]
+	then
+		MONITOR=$(ini_get screen output)
+		if [ -z "${MONITOR}" ]
+		then
+			MONITOR=$(first_connected_output)
+		fi
+		if [ -n "${MONITOR}" ]
+		then
+			xrandr --newmode "custom" ${CUSTOM_MODELINE}
+			xrandr --addmode "${MONITOR}" "custom"
+			xrandr --output "${MONITOR}" --mode "custom"
+		fi
+	fi
+
+	# set a screen rotation (if specified)
+	ROTATE_SCREEN=$(ini_get screen rotate_screen)
+	if [ -n "${ROTATE_SCREEN}" ]
+	then
+		MONITOR=$(ini_get screen output)
+		if [ -z "${MONITOR}" ]
+		then
+			MONITOR=$(first_connected_output)
+		fi
+		if [ -n "${MONITOR}" ]
+		then
+			xrandr --output "${MONITOR}" --rotate ${ROTATE_SCREEN}
+		fi
+	fi
+fi
+
+# enable/disable dark mode
+DARK_MODE=$(ini_get browser darkmode 0)
+if [ "${DARK_MODE}" -eq 1 ]
+then
+    export GTK_THEME=Adwaita-dark
+    CHROME_DARK_MODE_FLAGS="--enable-features=WebContentsForceDark:inversion_method/cielab_based/image_behavior/none"
+else
+	export GTK_THEME=Adwaita
+	CHROME_DARK_MODE_FLAGS=""
+fi
+
+# enable/disable hardware acceleration
+HW_ACCEL=$(ini_get browser hardware_accel 1)
+if [ "${HW_ACCEL}" -eq 1 ]
+then
+    CHROME_GPU_FLAGS=""
+else
+    CHROME_GPU_FLAGS="--disable-gpu"
+fi
+
+# enable/disable low_end_device_mode
+LOW_END=$(ini_get browser low_end_device_mode 0)
+if [ "${LOW_END}" -eq 1 ]
+then
+    CHROME_LOW_END_FLAGS="--enable-low-end-device-mode --disable-composited-antialiasing --disable-low-res-tiling"
+else
+    CHROME_LOW_END_FLAGS="--disable-low-end-device-mode"
+fi
+
+# enable/disable "disk" caching (ram disk in our case)
+DISABLE_CACHE=$(ini_get browser disable_cache 0)
+if [ "${DISABLE_CACHE}" -eq 1 ]
+then
+    CHROME_CACHE_FLAGS="--disk-cache-dir=/dev/null"
+else
+    CHROME_CACHE_FLAGS=""
+fi
+
+browser_setting() {
+	section="$1"
+	key="$2"
+	default="$3"
+	value=$(ini_get "${section}" "${key}")
+	if [ -z "${value}" ]
+	then
+		value=$(ini_get browser "${key}" "${default}")
+	fi
+	echo "${value}"
+}
+
+# start chromium (single or multi-instance)
+BROWSER_SECTIONS=$(ini_list_sections '^browser[0-9]+$')
+if [ -z "${BROWSER_SECTIONS}" ]
+then
+	BROWSER_SECTIONS="browser"
+fi
+
+INSTANCE_INDEX=0
+for SECTION in ${BROWSER_SECTIONS}
+do
+	INSTANCE_INDEX=$((INSTANCE_INDEX + 1))
+	URL=$(ini_get "${SECTION}" url)
+	if [ -z "${URL}" ]
+	then
+		echo "kiosk: ${SECTION} has no url configured, skipping"
+		continue
+	fi
+
+	WINDOW_POSITION=$(ini_get "${SECTION}" window_position)
+	WINDOW_SIZE=$(ini_get "${SECTION}" window_size)
+	TARGET_OUTPUT=$(ini_get "${SECTION}" output)
+	USER_DATA_DIR=$(ini_get "${SECTION}" user_data_dir)
+
+	if [ -n "${TARGET_OUTPUT}" ]
+	then
+		OUTPUT_GEOMETRY=$(output_geometry "${TARGET_OUTPUT}")
+		if [ -z "${OUTPUT_GEOMETRY}" ]
+		then
+			echo "kiosk: ${SECTION} output ${TARGET_OUTPUT} is not connected, skipping"
+			continue
+		fi
+
+		# If output is set, auto-place and auto-size the window unless overridden explicitly.
+		if [ -z "${WINDOW_POSITION}" ]
+		then
+			WINDOW_POSITION=$(printf '%s\n' "${OUTPUT_GEOMETRY}" | awk -F'[x+]' '{print $3","$4}')
+		fi
+		if [ -z "${WINDOW_SIZE}" ]
+		then
+			WINDOW_SIZE=$(printf '%s\n' "${OUTPUT_GEOMETRY}" | awk -F'[x+]' '{print $1","$2}')
+		fi
+	fi
+
+	if [ -z "${USER_DATA_DIR}" ] && [ "${SECTION}" != "browser" ]
+	then
+		USER_DATA_DIR="/tmp/chromium-profile-${INSTANCE_INDEX}"
+	fi
+
+	CHROME_WINDOW_FLAGS=""
+	if [ -n "${WINDOW_POSITION}" ]
+	then
+		WINDOW_POSITION=$(printf '%s' "${WINDOW_POSITION}" | tr 'x' ',')
+		CHROME_WINDOW_FLAGS="${CHROME_WINDOW_FLAGS} --window-position=${WINDOW_POSITION}"
+	fi
+	if [ -n "${WINDOW_SIZE}" ]
+	then
+		WINDOW_SIZE=$(printf '%s' "${WINDOW_SIZE}" | tr 'x' ',')
+		CHROME_WINDOW_FLAGS="${CHROME_WINDOW_FLAGS} --window-size=${WINDOW_SIZE}"
+	fi
+
+	CHROME_PROFILE_FLAGS=""
+	if [ -n "${USER_DATA_DIR}" ]
+	then
+		mkdir -p "${USER_DATA_DIR}"
+		CHROME_PROFILE_FLAGS="--user-data-dir=${USER_DATA_DIR}"
+		if [ "${DISABLE_CACHE}" -ne 1 ]
+		then
+			CHROME_PROFILE_FLAGS="${CHROME_PROFILE_FLAGS} --disk-cache-dir=${USER_DATA_DIR}/Cache"
+		fi
+	fi
+
+	chromium --start-fullscreen \
+			 --allow-insecure-localhost \
+			 --autoplay-policy=no-user-gesture-required \
+			 --check-for-update-interval=1 \
+			 --disable-component-update \
+			 --disable-features=Translate \
+			 --disable-features=TranslateUI \
+			 --disable-infobars \
+			 --disable-pinch \
+			 --disable-session-crashed-bubble \
+			 --disable-smooth-scrolling \
+			 --kiosk \
+			 --noerrdialogs \
+			 --overscroll-history-navigation=0 \
+			 --simulate-critical-update \
+			 --simulate-outdated-no-au='Tue, 31 Dec 2099 23:59:59 GMT' \
+			 --touch-events=enabled \
+			 --process-per-site \
+			 --no-memcheck \
+			 ${CHROME_DARK_MODE_FLAGS} \
+			 ${CHROME_GPU_FLAGS} \
+			 ${CHROME_LOW_END_FLAGS} \
+			 ${CHROME_CACHE_FLAGS} \
+			 ${CHROME_PROFILE_FLAGS} \
+			 ${CHROME_WINDOW_FLAGS} \
+			 ${URL} &
+
+	CACHE_CLEAR=$(browser_setting "${SECTION}" cache_clear_interval "")
+	if [ -n "${CACHE_CLEAR}" ]
+	then
+		/usr/bin/cache-clear-timer "${CACHE_CLEAR}" "${USER_DATA_DIR}" &
+	fi
+done

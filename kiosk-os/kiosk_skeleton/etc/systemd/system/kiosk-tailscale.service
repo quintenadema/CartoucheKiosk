@@ -1,0 +1,14 @@
+[Unit]
+Description=Configure optional Tailscale remote access
+After=network-online.target kiosk-wifi.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kiosk-tailscale
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target

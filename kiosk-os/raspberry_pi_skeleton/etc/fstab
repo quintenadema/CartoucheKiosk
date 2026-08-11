@@ -1,0 +1,5 @@
+proc            /proc           proc    defaults          0       0
+# Tailscale keeps its small network identity in /boot/firmware/tailscale.
+# The root filesystem remains read-only; this configuration partition must be writable.
+PARTUUID=23421312-01  /boot/firmware  vfat    rw,defaults          0       2
+PARTUUID=23421312-02  /               ext4    ro,defaults,noatime  0       1

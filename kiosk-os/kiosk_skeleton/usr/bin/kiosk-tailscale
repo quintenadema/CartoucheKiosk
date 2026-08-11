@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+
+CONFIG_FILE="/boot/firmware/kioskbrowser.ini"
+ENABLED=$(get-ini "${CONFIG_FILE}" tailscale enabled 0 || true)
+
+if [ "${ENABLED}" != "1" ]; then
+	exit 0
+fi
+
+AUTH_KEY_FILE=$(get-ini "${CONFIG_FILE}" tailscale auth_key_file /boot/firmware/tailscale-auth.key || true)
+ACCEPT_DNS=$(get-ini "${CONFIG_FILE}" tailscale accept_dns 0 || true)
+TAILSCALE_SSH=$(get-ini "${CONFIG_FILE}" tailscale tailscale_ssh 0 || true)
+HOSTNAME=$(get-ini "${CONFIG_FILE}" general hostname kioskpi || true)
+STATE_FILE="/boot/firmware/tailscale/tailscaled.state"
+
+mkdir -p /boot/firmware/tailscale
+systemctl start tailscaled.service
+
+UP_ARGS=(
+	"--hostname=${HOSTNAME}"
+	"--accept-dns=$([ "${ACCEPT_DNS}" = "1" ] && echo true || echo false)"
+	"--ssh=$([ "${TAILSCALE_SSH}" = "1" ] && echo true || echo false)"
+	"--timeout=45s"
+)
+
+if [ ! -s "${STATE_FILE}" ]; then
+	if [ ! -s "${AUTH_KEY_FILE}" ]; then
+		echo "Tailscale is enabled, but no auth key exists at ${AUTH_KEY_FILE}" >&2
+		exit 1
+	fi
+	UP_ARGS+=("--auth-key=file:${AUTH_KEY_FILE}")
+fi
+
+tailscale up "${UP_ARGS[@]}"
+
+# A one-off key is no longer needed after the persistent node state exists.
+if [ -s "${STATE_FILE}" ] && [ -f "${AUTH_KEY_FILE}" ]; then
+	: > "${AUTH_KEY_FILE}"
+fi
