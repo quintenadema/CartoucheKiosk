@@ -2,7 +2,7 @@ import Head from "next/head";
 import Image from "next/image";
 import { format, isToday, setDefaultOptions } from "date-fns";
 import { nl } from "date-fns/locale";
-import { CalendarDays, CircleOff, Clock3, MapPinned, Newspaper, Sparkles } from "lucide-react";
+import { CalendarDays, CircleOff, Clock3, MapPinned, Newspaper } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 setDefaultOptions({ locale: nl });
@@ -502,20 +502,6 @@ function FeaturedSponsorTakeover({ sponsor, exiting }) {
 					alt={`Uitgelichte foto van ${sponsor.name}`}
 					className="absolute inset-0 h-full w-full object-contain"
 				/>
-				<div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,18,11,0.04)_42%,rgba(4,18,11,0.92)_100%)]" />
-				<div className="absolute bottom-0 left-0 right-0 flex items-end justify-between gap-10 p-12">
-					<div>
-						<div className="inline-flex items-center gap-2 rounded-full border border-[#f2cf55]/35 bg-[#0a291b]/85 px-4 py-2 text-[12px] font-bold uppercase tracking-[0.28em] text-[#f2cf55] backdrop-blur-md">
-							<Sparkles className="h-4 w-4" /> Uitgelichte sponsor
-						</div>
-						<h2 className="mt-5 max-w-[1100px] text-[68px] font-semibold leading-none tracking-[-0.035em] text-white drop-shadow-xl">
-							{sponsor.name}
-						</h2>
-					</div>
-					<div className="flex h-[142px] w-[260px] shrink-0 items-center justify-center rounded-[24px] border border-white/20 bg-white/95 p-7 shadow-2xl">
-						<img src={sponsor.image} alt="" className="max-h-full max-w-full object-contain" />
-					</div>
-				</div>
 			</article>
 		</div>
 	);
