@@ -15,13 +15,17 @@ export default async function handler(req, res) {
 				if (!(await getAdminSession(req))) throw new Error("Niet ingelogd als beheerder");
 
 				const filename = pathname.split("/").pop()?.replace(/[^a-zA-Z0-9._-]/g, "-") || "logo";
-				if (pathname !== `sponsors/${filename}`) throw new Error("Ongeldig uploadpad");
+				const isLogo = pathname === `sponsors/${filename}`;
+				const isFeaturedImage = pathname === `sponsors/featured/${filename}`;
+				if (!isLogo && !isFeaturedImage) throw new Error("Ongeldig uploadpad");
 
 				return {
 					allowedContentTypes: ["image/jpeg", "image/png", "image/webp"],
 					maximumSizeInBytes: 4 * 1024 * 1024,
 					addRandomSuffix: true,
-					tokenPayload: JSON.stringify({ kind: "sponsor-logo" }),
+					tokenPayload: JSON.stringify({
+						kind: isFeaturedImage ? "sponsor-featured-image" : "sponsor-logo",
+					}),
 				};
 			},
 			onUploadCompleted: async () => undefined,

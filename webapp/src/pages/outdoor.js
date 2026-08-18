@@ -2,8 +2,8 @@ import Head from "next/head";
 import Image from "next/image";
 import { format, isToday, setDefaultOptions } from "date-fns";
 import { nl } from "date-fns/locale";
-import { CalendarDays, CircleOff, Clock3, MapPinned, Newspaper } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CalendarDays, CircleOff, Clock3, MapPinned, Newspaper, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 setDefaultOptions({ locale: nl });
 
@@ -12,6 +12,9 @@ const DESIGN_HEIGHT = 1080;
 const REFRESH_INTERVAL_MS = 120000;
 const CLOCK_INTERVAL_MS = 30000;
 const LIVE_WINDOW_MS = 110 * 60 * 1000;
+const FEATURED_SPONSOR_DURATION_MS = 10_000;
+const FEATURED_SPONSOR_EXIT_MS = 900;
+const SPONSOR_CAROUSEL_SPEED_MULTIPLIER = 8;
 const DEMO_FORCE_LIVE = false;
 
 const FIELD_LAYOUT = [
@@ -322,9 +325,13 @@ function FieldCard({ fieldConfig, matches }) {
 			{/* <PitchLines rotation={fieldConfig.rotation} /> */}
 
 			<div className="relative z-10 flex h-full flex-col p-3 text-white">
-
-				<div className={`${compact ? "text-[18px]" : "text-[22px]"} font-semibold leading-none mx-auto`}>
-					{fieldConfig.name}
+				<div className="flex items-center justify-between">
+					<div className={`${compact ? "text-[18px]" : "text-[22px]"} font-semibold leading-none`}>
+						{fieldConfig.name}
+					</div>
+					<div className={`${compact ? "text-[18px]" : "text-[22px]"} font-semibold leading-none`}>
+						{fieldConfig.name}
+					</div>
 				</div>
 				{/* <div className="flex items-start justify-between gap-2">
 					<div>
@@ -375,7 +382,49 @@ function UtilityCard({ title, muted = false }) {
 	);
 }
 
-function SponsorStrip({ sponsors }) {
+function SponsorStrip({ sponsors, onFeaturedSponsor, paused = false }) {
+	const railRef = useRef(null);
+	const lastTriggeredRef = useRef(new Map());
+	const duration = Math.max(sponsors.length * 8, 48) / SPONSOR_CAROUSEL_SPEED_MULTIPLIER;
+
+	useEffect(() => {
+		if (paused || sponsors.length === 0 || !onFeaturedSponsor) return undefined;
+
+		const checkCenteredSponsor = () => {
+			const rail = railRef.current;
+			if (!rail) return;
+
+			const featuredCards = rail.querySelectorAll("[data-featured-sponsor]");
+			let centeredCard = null;
+			let closestDistance = Number.POSITIVE_INFINITY;
+
+			for (const card of featuredCards) {
+				const rect = card.getBoundingClientRect();
+				const distance = Math.abs(rect.left + rect.width / 2 - window.innerWidth / 2);
+				if (distance < closestDistance) {
+					closestDistance = distance;
+					centeredCard = card;
+				}
+			}
+
+			if (!centeredCard || closestDistance > 12) return;
+
+			const sponsorId = centeredCard.dataset.featuredSponsor;
+			const sponsor = sponsors.find((item) => item.id === sponsorId);
+			if (!sponsor?.featured || !sponsor.featuredImageUrl) return;
+
+			const now = Date.now();
+			const cooldown = Math.max(duration * 800, 30_000);
+			if (now - (lastTriggeredRef.current.get(sponsor.id) ?? 0) < cooldown) return;
+
+			lastTriggeredRef.current.set(sponsor.id, now);
+			onFeaturedSponsor(sponsor);
+		};
+
+		const detectionInterval = window.setInterval(checkCenteredSponsor, 100);
+		return () => window.clearInterval(detectionInterval);
+	}, [duration, onFeaturedSponsor, paused, sponsors]);
+
 	if (sponsors.length === 0) {
 		return (
 			<aside className="grid h-full grid-cols-[190px_minmax(0,1fr)] overflow-hidden rounded-[24px] border border-white/[0.09] bg-white/[0.035]">
@@ -392,8 +441,6 @@ function SponsorStrip({ sponsors }) {
 		);
 	}
 
-	const duration = Math.max(sponsors.length * 8, 48);
-
 	return (
 		<aside
 			aria-label="Sponsoren van HC Cartouche"
@@ -407,6 +454,7 @@ function SponsorStrip({ sponsors }) {
 			</div>
 
 			<div
+				ref={railRef}
 				className="relative flex min-w-0 items-center overflow-hidden px-4"
 				style={{
 					maskImage: "linear-gradient(to right, transparent 0, black 4%, black 96%, transparent 100%)",
@@ -414,7 +462,7 @@ function SponsorStrip({ sponsors }) {
 				}}
 			>
 				<div
-					className="flex w-max will-change-transform"
+					className={`flex w-max will-change-transform ${paused ? "sponsor-track-paused" : ""}`}
 					style={{ animation: `outdoor-sponsors-left ${duration}s linear infinite` }}
 				>
 					{[0, 1].map((copy) => (
@@ -422,6 +470,7 @@ function SponsorStrip({ sponsors }) {
 							{sponsors.map((sponsor) => (
 								<div
 									key={`${copy}-${sponsor.id}`}
+									data-featured-sponsor={sponsor.featured && sponsor.featuredImageUrl ? sponsor.id : undefined}
 									className="flex h-[116px] w-[220px] shrink-0 flex-col items-center justify-center rounded-[17px] border border-[#dfe5dd] bg-[#f8faf6] px-5 py-3 text-center shadow-[0_12px_30px_rgba(0,0,0,0.2)]"
 								>
 									<img
@@ -443,7 +492,36 @@ function SponsorStrip({ sponsors }) {
 	);
 }
 
-function InformationPlaceholder({ title, eyebrow, icon: Icon, warm = false }) {
+function FeaturedSponsorTakeover({ sponsor, exiting }) {
+	return (
+		<div className="pointer-events-none absolute inset-0 z-50" role="status" aria-live="polite">
+			<div className={`featured-takeover-backdrop absolute inset-0 ${exiting ? "is-exiting" : ""}`} />
+			<article className={`featured-takeover-card absolute inset-[42px] overflow-hidden border border-white/15 bg-[#07170f] shadow-[0_44px_120px_rgba(0,0,0,0.7)] ${exiting ? "is-exiting" : ""}`}>
+				<img
+					src={sponsor.featuredImageUrl}
+					alt={`Uitgelichte foto van ${sponsor.name}`}
+					className="absolute inset-0 h-full w-full object-contain"
+				/>
+				<div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,18,11,0.04)_42%,rgba(4,18,11,0.92)_100%)]" />
+				<div className="absolute bottom-0 left-0 right-0 flex items-end justify-between gap-10 p-12">
+					<div>
+						<div className="inline-flex items-center gap-2 rounded-full border border-[#f2cf55]/35 bg-[#0a291b]/85 px-4 py-2 text-[12px] font-bold uppercase tracking-[0.28em] text-[#f2cf55] backdrop-blur-md">
+							<Sparkles className="h-4 w-4" /> Uitgelichte sponsor
+						</div>
+						<h2 className="mt-5 max-w-[1100px] text-[68px] font-semibold leading-none tracking-[-0.035em] text-white drop-shadow-xl">
+							{sponsor.name}
+						</h2>
+					</div>
+					<div className="flex h-[142px] w-[260px] shrink-0 items-center justify-center rounded-[24px] border border-white/20 bg-white/95 p-7 shadow-2xl">
+						<img src={sponsor.image} alt="" className="max-h-full max-w-full object-contain" />
+					</div>
+				</div>
+			</article>
+		</div>
+	);
+}
+
+function InformationPlaceholder({ title, icon: Icon, warm = false }) {
 	return (
 		<section
 			className={`relative h-full overflow-hidden rounded-[24px] border p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_50px_rgba(0,0,0,0.2)] ${
@@ -457,13 +535,8 @@ function InformationPlaceholder({ title, eyebrow, icon: Icon, warm = false }) {
 
 			<div className="relative flex h-full flex-col">
 				<div className="flex items-start justify-between gap-4">
-					<div>
-						<p className={`text-[10px] font-semibold uppercase tracking-[0.32em] ${warm ? "text-[#6a5727]" : "text-[#e1b943]"}`}>
-							{eyebrow}
-						</p>
-						<h2 className="mt-2 text-[36px] font-semibold leading-none">{title}</h2>
-					</div>
-					<div className={`flex h-14 w-14 items-center justify-center rounded-[17px] border ${warm ? "border-[#173120]/10 bg-white/30" : "border-white/10 bg-white/[0.07]"}`}>
+					<h2 className="mt-2 text-[32px] font-semibold leading-none">{title}</h2>
+					<div className={`flex h-10 w-10 items-center justify-center rounded-[17px] border ${warm ? "border-[#173120]/10 bg-white/30" : "border-white/10 bg-white/[0.07]"}`}>
 						<Icon className="h-6 w-6" strokeWidth={1.8} />
 					</div>
 				</div>
@@ -480,6 +553,37 @@ export default function OutdoorGames() {
 	const [loading, setLoading] = useState(true);
 	const [currentTime, setCurrentTime] = useState(new Date());
 	const [lastUpdated, setLastUpdated] = useState(null);
+	const [featuredTakeover, setFeaturedTakeover] = useState(null);
+
+	const showFeaturedSponsor = useCallback((sponsor) => {
+		setFeaturedTakeover((current) => current ?? { sponsor, exiting: false });
+	}, []);
+
+	useEffect(() => {
+		if (!featuredTakeover) return undefined;
+
+		const timeout = window.setTimeout(
+			() => {
+				if (featuredTakeover.exiting) {
+					setFeaturedTakeover(null);
+				} else {
+					setFeaturedTakeover((current) => current ? { ...current, exiting: true } : null);
+				}
+			},
+			featuredTakeover.exiting ? FEATURED_SPONSOR_EXIT_MS : FEATURED_SPONSOR_DURATION_MS
+		);
+
+		return () => window.clearTimeout(timeout);
+	}, [featuredTakeover]);
+
+	useEffect(() => {
+		for (const sponsor of sponsors) {
+			if (sponsor.featured && sponsor.featuredImageUrl) {
+				const preload = new window.Image();
+				preload.src = sponsor.featuredImageUrl;
+			}
+		}
+	}, [sponsors]);
 
 	useEffect(() => {
 		const syncGames = async () => {
@@ -612,13 +716,24 @@ export default function OutdoorGames() {
 							</div>
 
 							<aside className="grid min-h-0 grid-rows-2 gap-7">
-								<InformationPlaceholder title="Nieuws" eyebrow="Clubnieuws" icon={Newspaper} />
-								<InformationPlaceholder title="Agenda" eyebrow="Binnenkort" icon={CalendarDays} warm />
+								<InformationPlaceholder title="Nieuws" icon={Newspaper} />
+								<InformationPlaceholder title="Agenda" icon={CalendarDays} warm />
 							</aside>
 						</div>
 
-						<SponsorStrip sponsors={sponsors} />
+						<SponsorStrip
+							sponsors={sponsors}
+							onFeaturedSponsor={showFeaturedSponsor}
+							paused={Boolean(featuredTakeover)}
+						/>
 					</main>
+
+					{featuredTakeover ? (
+						<FeaturedSponsorTakeover
+							sponsor={featuredTakeover.sponsor}
+							exiting={featuredTakeover.exiting}
+						/>
+					) : null}
 				</div>
 			</KioskStage>
 
@@ -626,6 +741,49 @@ export default function OutdoorGames() {
 				@keyframes outdoor-sponsors-left {
 					from { transform: translateX(0); }
 					to { transform: translateX(-50%); }
+				}
+
+				@keyframes featured-takeover-in {
+					from { opacity: 0; transform: translateY(430px) scale(0.14); border-radius: 90px; }
+					to { opacity: 1; transform: translateY(0) scale(1); border-radius: 30px; }
+				}
+
+				@keyframes featured-takeover-out {
+					from { opacity: 1; transform: translateY(0) scale(1); border-radius: 30px; }
+					to { opacity: 0; transform: translateY(430px) scale(0.14); border-radius: 90px; }
+				}
+
+				@keyframes featured-backdrop-in {
+					from { opacity: 0; }
+					to { opacity: 1; }
+				}
+
+				@keyframes featured-backdrop-out {
+					from { opacity: 1; }
+					to { opacity: 0; }
+				}
+
+				.featured-takeover-card {
+					transform-origin: center bottom;
+					animation: featured-takeover-in 800ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
+				}
+
+				.sponsor-track-paused {
+					animation-play-state: paused !important;
+				}
+
+				.featured-takeover-card.is-exiting {
+					animation: featured-takeover-out ${FEATURED_SPONSOR_EXIT_MS}ms cubic-bezier(0.72, 0, 0.78, 0.18) both;
+				}
+
+				.featured-takeover-backdrop {
+					background: rgba(8, 11, 9, 0.52);
+					backdrop-filter: grayscale(0.88) brightness(0.42) blur(1.5px);
+					animation: featured-backdrop-in 500ms ease-out both;
+				}
+
+				.featured-takeover-backdrop.is-exiting {
+					animation: featured-backdrop-out ${FEATURED_SPONSOR_EXIT_MS}ms ease-in both;
 				}
 			`}</style>
 		</>

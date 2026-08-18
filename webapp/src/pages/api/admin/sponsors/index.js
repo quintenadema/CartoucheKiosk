@@ -22,9 +22,8 @@ export default async function handler(req, res) {
 			const sponsor = await createSponsor(input);
 			return res.status(201).json({ sponsor });
 		} catch (error) {
-			if (input?.blobPathname) {
-				await del(input.blobPathname).catch(() => undefined);
-			}
+			const uploadedPathnames = [input?.blobPathname, input?.featuredBlobPathname].filter(Boolean);
+			if (uploadedPathnames.length > 0) await del(uploadedPathnames).catch(() => undefined);
 			console.error("Sponsor toevoegen is mislukt", error);
 			return res.status(400).json({ error: error.message || "Sponsor kon niet worden toegevoegd" });
 		}

@@ -11,6 +11,7 @@ import {
 	Pencil,
 	Plus,
 	Search,
+	Sparkles,
 	Trash2,
 	X,
 } from "lucide-react";
@@ -25,12 +26,17 @@ const emptyForm = {
 	active: true,
 	imageUrl: "",
 	blobPathname: "",
+	featured: false,
+	featuredImageUrl: "",
+	featuredBlobPathname: "",
 };
 
 function SponsorEditor({ sponsor, onClose, onSaved }) {
-	const [form, setForm] = useState(sponsor ?? emptyForm);
+	const [form, setForm] = useState({ ...emptyForm, ...(sponsor ?? {}) });
 	const [file, setFile] = useState(null);
 	const [preview, setPreview] = useState(sponsor?.imageUrl ?? "");
+	const [featuredFile, setFeaturedFile] = useState(null);
+	const [featuredPreview, setFeaturedPreview] = useState(sponsor?.featuredImageUrl ?? "");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 
@@ -41,6 +47,13 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 		setPreview(URL.createObjectURL(selected));
 	}
 
+	function chooseFeaturedFile(event) {
+		const selected = event.target.files?.[0];
+		if (!selected) return;
+		setFeaturedFile(selected);
+		setFeaturedPreview(URL.createObjectURL(selected));
+	}
+
 	async function save(event) {
 		event.preventDefault();
 		setSaving(true);
@@ -49,6 +62,8 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 		try {
 			let imageUrl = form.imageUrl;
 			let blobPathname = form.blobPathname;
+			let featuredImageUrl = form.featuredImageUrl;
+			let featuredBlobPathname = form.featuredBlobPathname;
 
 			if (file) {
 				const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -60,12 +75,28 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 				blobPathname = blob.pathname;
 			}
 
+			if (featuredFile) {
+				const cleanName = featuredFile.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+				const blob = await upload(`sponsors/featured/${cleanName}`, featuredFile, {
+					access: "public",
+					handleUploadUrl: "/api/admin/upload",
+				});
+				featuredImageUrl = blob.url;
+				featuredBlobPathname = blob.pathname;
+			}
+
 			const response = await fetch(
 				form.id ? `/api/admin/sponsors/${form.id}` : "/api/admin/sponsors",
 				{
 					method: form.id ? "PUT" : "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ ...form, imageUrl, blobPathname }),
+					body: JSON.stringify({
+						...form,
+						imageUrl,
+						blobPathname,
+						featuredImageUrl,
+						featuredBlobPathname,
+					}),
 				}
 			);
 			const body = await response.json();
@@ -133,7 +164,7 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 						/>
 					</label>
 
-					<div className="grid gap-5 sm:grid-cols-2">
+					<div className="grid items-start gap-5 sm:grid-cols-2">
 						<label className="block">
 							<span className="mb-2 block text-sm font-semibold text-[#25382b]">Volgorde</span>
 							<input
@@ -145,13 +176,44 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 								className="w-full rounded-xl border border-[#c8c0ad] bg-white px-4 py-3.5 outline-none focus:border-[#0c4a2c] focus:ring-4 focus:ring-[#0c4a2c]/10"
 							/>
 						</label>
-						<label className="flex items-end">
-							<span className="flex w-full items-center justify-between rounded-xl border border-[#c8c0ad] bg-white px-4 py-3.5 text-sm font-semibold text-[#25382b]">
+						<div className="space-y-3">
+							<label className="flex items-center justify-between rounded-xl border border-[#c8c0ad] bg-white px-4 py-3.5 text-sm font-semibold text-[#25382b]">
 								Zichtbaar op scherm
 								<input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} className="h-5 w-5 accent-[#0c4a2c]" />
-							</span>
-						</label>
+							</label>
+							<label className="flex items-center justify-between rounded-xl border border-[#c8c0ad] bg-white px-4 py-3.5 text-sm font-semibold text-[#25382b]">
+								<span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#9a7914]" /> Uitgelicht</span>
+								<input type="checkbox" checked={form.featured} onChange={(event) => setForm({ ...form, featured: event.target.checked })} className="h-5 w-5 accent-[#0c4a2c]" />
+							</label>
+						</div>
 					</div>
+
+					{form.featured ? (
+						<div className="rounded-2xl border border-[#d8c98f] bg-[#f4ecd3] p-4">
+							<div className="mb-3">
+								<span className="block text-sm font-semibold text-[#25382b]">Uitgelichte foto</span>
+								<p className="mt-1 text-xs leading-relaxed text-[#6f735f]">Deze foto vult het scherm gedurende 10 seconden wanneer de sponsor het midden van de carrousel bereikt.</p>
+							</div>
+							<label className="group flex min-h-56 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-[#c7b66f] bg-white/70 transition hover:border-[#0c4a2c] hover:bg-white">
+								{featuredPreview ? (
+									<img src={featuredPreview} alt="Voorvertoning uitgelichte sponsorfoto" className="h-56 w-full object-cover" />
+								) : (
+									<div className="px-6 text-center text-[#607067]">
+										<ImagePlus className="mx-auto h-8 w-8 text-[#9a7914]" />
+										<p className="mt-3 font-semibold">Kies een uitgelichte foto</p>
+										<p className="mt-1 text-xs">Liggend 16:9 aanbevolen · PNG, JPG of WebP · maximaal 4 MB</p>
+									</div>
+								)}
+								<input
+									type="file"
+									accept="image/png,image/jpeg,image/webp"
+									onChange={chooseFeaturedFile}
+									className="sr-only"
+									required={!form.featuredImageUrl}
+								/>
+							</label>
+						</div>
+					) : null}
 
 					{error ? <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
 
@@ -274,7 +336,7 @@ export default function AdminPage({ initialSponsors }) {
 								{filteredSponsors.map((sponsor) => (
 									<li key={sponsor.id} className="grid items-center gap-4 px-5 py-4 transition hover:bg-white/70 sm:grid-cols-[72px_minmax(0,1fr)_110px_auto] sm:px-6">
 										<div className="flex h-16 w-[72px] items-center justify-center rounded-xl border border-[#ded7c9] bg-white p-2"><img src={sponsor.imageUrl} alt={sponsor.name} className="max-h-full max-w-full object-contain" /></div>
-										<div className="min-w-0"><p className="truncate text-lg font-semibold">{sponsor.name}</p><p className="mt-1 truncate text-sm text-[#788279]">{sponsor.websiteUrl || "Geen website ingesteld"}</p></div>
+										<div className="min-w-0"><div className="flex min-w-0 items-center gap-2"><p className="truncate text-lg font-semibold">{sponsor.name}</p>{sponsor.featured ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#f2e5b8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#765b08]"><Sparkles className="h-3 w-3" /> Uitgelicht</span> : null}</div><p className="mt-1 truncate text-sm text-[#788279]">{sponsor.websiteUrl || "Geen website ingesteld"}</p></div>
 										<div><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${sponsor.active ? "bg-[#e0f0e4] text-[#196039]" : "bg-[#e7e3d9] text-[#6d706b]"}`}><span className={`h-1.5 w-1.5 rounded-full ${sponsor.active ? "bg-[#2a8b51]" : "bg-[#92938e]"}`} />{sponsor.active ? "Zichtbaar" : "Verborgen"}</span><p className="mt-1.5 text-xs text-[#899188]">Volgorde {sponsor.sortOrder}</p></div>
 										<div className="flex justify-end gap-1.5">
 											<button onClick={() => toggleSponsor(sponsor)} className="rounded-lg p-2.5 text-[#657269] transition hover:bg-[#e6eee8] hover:text-[#0c4a2c]" aria-label={sponsor.active ? `${sponsor.name} verbergen` : `${sponsor.name} tonen`}>{sponsor.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>

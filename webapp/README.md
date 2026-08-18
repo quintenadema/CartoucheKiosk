@@ -1,13 +1,13 @@
-# Cartouche Dome webapp
+# Cartouche Kiosk webapp
 
-De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cartouche. De productieomgeving draait binnen het Vercel-team **ADEMA Group** onder beheer van Quinten Adema. Sponsorcontent en beheerdersaccounts staan in Neon; sponsorlogo’s staan in Vercel Blob.
+De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cartouche. De productieomgeving draait binnen het Vercel-team **ADEMA Group** onder beheer van Quinten Adema. Sponsorcontent en beheerdersaccounts staan in Neon; sponsorlogo’s en uitgelichte sponsorfoto’s staan in Vercel Blob.
 
 ## Routes
 
 | Route | Doel | Toegang |
 | --- | --- | --- |
 | `/indoor` | Wedstrijden in de Cartouche Hockey Dome | Publiek, kioskweergave |
-| `/outdoor` | Veldindeling en buitenwedstrijden, met verticaal scrollende sponsorbanen | Publiek, kioskweergave |
+| `/outdoor` | Veldindeling en buitenwedstrijden, met horizontale sponsorcarrousel en uitgelichte sponsormomenten | Publiek, kioskweergave |
 | `/sponsors` | Doorlopende sponsorcarrousel | Publiek, kioskweergave |
 | `/admin/login` | Login met het gezamenlijke clubwachtwoord | Publiek formulier |
 | `/admin` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
@@ -21,7 +21,7 @@ De wedstrijdgegevens worden server-side via `src/pages/api/games.js` opgehaald. 
 - Tailwind CSS voor de schermen en beheerinterface;
 - Better Auth met een wachtwoord-only scherm en één intern beheerdersaccount;
 - Neon Postgres via een pooled `DATABASE_URL`;
-- Vercel Blob in publieke leesmodus voor sponsorlogo’s;
+- Vercel Blob in publieke leesmodus voor sponsorlogo’s en uitgelichte foto’s;
 - Vercel voor builds, hosting, serverless API-routes en secrets.
 
 ## Lokale installatie
@@ -56,7 +56,9 @@ Vercel bevat op dit moment de database-, Blob- en Better Auth-configuratie voor 
 De SQL-bestanden in `migrations/` zijn idempotent en bevatten:
 
 - `001-better-auth.sql`: accounts, credentials, sessies en verificaties;
-- `002-sponsors.sql`: sponsornaam, logo-URL, Blob-pad, website, volgorde en zichtbaarheid.
+- `002-sponsors.sql`: sponsornaam, logo-URL, Blob-pad, website, volgorde en zichtbaarheid;
+- `003-better-auth-rate-limit.sql`: persistente begrenzing van inlogpogingen;
+- `004-featured-sponsors.sql`: uitgelichte status en de URL en het Blob-pad van de uitgelichte foto.
 
 Nieuwe of lege Neon-database voorbereiden:
 
@@ -104,9 +106,12 @@ Een beheerder kan in `/admin`:
 - sponsornaam en optionele website instellen;
 - de sorteervolgorde bepalen;
 - een sponsor tijdelijk verbergen zonder gegevens te verwijderen;
+- een sponsor als `Uitgelicht` markeren en daarvoor een liggende foto uploaden;
 - een sponsor definitief verwijderen.
 
 Uploads gaan rechtstreeks van de browser naar Vercel Blob met een kortlevend uploadtoken. Dat token wordt alleen afgegeven na een geldige beheerderssessie. Bij vervangen of verwijderen ruimt de API het oude Blob-object op.
+
+Op `/outdoor` pauzeert de horizontale carrousel wanneer een uitgelichte sponsor het midden van het scherm bereikt. De uitgelichte foto zoomt dan naar een bijna schermvullende takeover, blijft 10 seconden zichtbaar en zoomt daarna terug. De carrousel hervat vervolgens automatisch. Alleen actieve sponsors met zowel `featured = true` als een geldige uitgelichte foto kunnen deze takeover starten.
 
 ## Testen en bouwen
 
@@ -119,6 +124,7 @@ Controleer vóór deployment minimaal:
 
 - login en logout op `/admin`;
 - sponsor toevoegen, aanpassen, verbergen en verwijderen;
+- `Uitgelicht` aanzetten, een foto uploaden en de 10-seconden-takeover op `/outdoor` controleren;
 - weergave op `/sponsors` zonder beheerderssessie;
 - `/indoor` en `/outdoor` op de resoluties van de echte schermen.
 

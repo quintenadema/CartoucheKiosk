@@ -29,8 +29,24 @@ export function validateSponsorInput(body) {
 	if (!imageUrl) throw new Error("Een sponsorlogo is verplicht");
 
 	const blobPathname = String(body?.blobPathname ?? "").trim();
-	if (!blobPathname.startsWith("sponsors/")) {
+	if (!/^sponsors\/(?!featured\/)(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+$/.test(blobPathname)) {
 		throw new Error("Ongeldig Blob-pad");
+	}
+
+	const featured = body?.featured === true;
+	const featuredImageUrl = optionalUrl(body?.featuredImageUrl, "Uitgelichte afbeeldings-URL");
+	const featuredBlobPathname = String(body?.featuredBlobPathname ?? "").trim() || null;
+
+	if (Boolean(featuredImageUrl) !== Boolean(featuredBlobPathname)) {
+		throw new Error("De uitgelichte foto is niet volledig geüpload");
+	}
+
+	if (featuredBlobPathname && !/^sponsors\/featured\/[^/]+$/.test(featuredBlobPathname)) {
+		throw new Error("Ongeldig Blob-pad voor de uitgelichte foto");
+	}
+
+	if (featured && !featuredImageUrl) {
+		throw new Error("Een uitgelichte foto is verplicht wanneer Uitgelicht aanstaat");
 	}
 
 	const numericSortOrder = Number(body?.sortOrder ?? 0);
@@ -45,5 +61,8 @@ export function validateSponsorInput(body) {
 		websiteUrl: optionalUrl(body?.websiteUrl, "Website-URL"),
 		sortOrder: numericSortOrder,
 		active: body?.active !== false,
+		featured,
+		featuredImageUrl,
+		featuredBlobPathname,
 	};
 }

@@ -28,11 +28,25 @@ export default async function handler(req, res) {
 					console.error("Oud sponsorlogo verwijderen is mislukt", error)
 				);
 			}
+			if (
+				existing.featuredBlobPathname &&
+				existing.featuredBlobPathname !== input.featuredBlobPathname
+			) {
+				await del(existing.featuredBlobPathname).catch((error) =>
+					console.error("Oude uitgelichte sponsorfoto verwijderen is mislukt", error)
+				);
+			}
 
 			return res.status(200).json({ sponsor });
 		} catch (error) {
 			if (input?.blobPathname && existing?.blobPathname !== input.blobPathname) {
 				await del(input.blobPathname).catch(() => undefined);
+			}
+			if (
+				input?.featuredBlobPathname &&
+				existing?.featuredBlobPathname !== input.featuredBlobPathname
+			) {
+				await del(input.featuredBlobPathname).catch(() => undefined);
 			}
 			console.error("Sponsor bijwerken is mislukt", error);
 			return res.status(400).json({ error: error.message || "Sponsor kon niet worden bijgewerkt" });
@@ -47,6 +61,11 @@ export default async function handler(req, res) {
 			await del(deleted.blob_pathname).catch((error) =>
 				console.error("Sponsorlogo verwijderen is mislukt", error)
 			);
+			if (deleted.featured_blob_pathname) {
+				await del(deleted.featured_blob_pathname).catch((error) =>
+					console.error("Uitgelichte sponsorfoto verwijderen is mislukt", error)
+				);
+			}
 			return res.status(204).end();
 		} catch (error) {
 			console.error("Sponsor verwijderen is mislukt", error);
