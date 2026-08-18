@@ -10,7 +10,7 @@ const RESPONSE_CACHE_TTL_MS = 2 * 60 * 1000;
 const RATE_LIMIT_BACKOFF_MS = 60 * 1000;
 const FACILITIES = [
 	{ responseKey: "domeGames", id: 731, fallbackName: "Cartouche Hockey Dome" },
-	{ responseKey: "duivesteynGames", id: 102, fallbackName: "Sportpark DuiveSteyn" },
+	{ responseKey: "duivesteynGames", id: 102, fallbackName: "V.M.H.C. Cartouche" },
 ];
 
 const globalStore = globalThis.__cartoucheHockeyWeereltStore ??= {

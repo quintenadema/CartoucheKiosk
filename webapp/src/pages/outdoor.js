@@ -2,7 +2,7 @@ import Head from "next/head";
 import Image from "next/image";
 import { format, isToday, setDefaultOptions } from "date-fns";
 import { nl } from "date-fns/locale";
-import { CircleOff, Clock3, MapPinned } from "lucide-react";
+import { CalendarDays, CircleOff, Clock3, MapPinned, Newspaper } from "lucide-react";
 import { useEffect, useState } from "react";
 
 setDefaultOptions({ locale: nl });
@@ -375,56 +375,102 @@ function UtilityCard({ title, muted = false }) {
 	);
 }
 
-function SponsorRail({ sponsors, reverse = false }) {
+function SponsorStrip({ sponsors }) {
 	if (sponsors.length === 0) {
 		return (
-			<aside className="flex h-full items-center justify-center rounded-[24px] border border-white/[0.08] bg-white/[0.035]">
-				<span className="-rotate-90 whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.34em] text-white/30">
-					Onze sponsoren
-				</span>
+			<aside className="grid h-full grid-cols-[190px_minmax(0,1fr)] overflow-hidden rounded-[24px] border border-white/[0.09] bg-white/[0.035]">
+				<div className="flex items-center border-r border-white/[0.08] px-7">
+					<div>
+						<p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[#e1b943]">Onze</p>
+						<p className="mt-1 text-[24px] font-semibold leading-none text-white">Sponsors</p>
+					</div>
+				</div>
+				<div className="flex items-center justify-center text-[11px] font-semibold uppercase tracking-[0.3em] text-white/25">
+					Sponsorcarrousel
+				</div>
 			</aside>
 		);
 	}
 
-	const duration = Math.max(sponsors.length * 7, 70);
+	const duration = Math.max(sponsors.length * 8, 48);
 
 	return (
 		<aside
 			aria-label="Sponsoren van HC Cartouche"
-			className="relative h-full overflow-hidden rounded-[24px] border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.065),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-			style={{
-				maskImage: "linear-gradient(to bottom, transparent 0, black 5%, black 95%, transparent 100%)",
-				WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 5%, black 95%, transparent 100%)",
-			}}
+			className="grid h-full grid-cols-[190px_minmax(0,1fr)] overflow-hidden rounded-[24px] border border-white/[0.09] bg-[linear-gradient(110deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
 		>
+			<div className="relative z-10 flex items-center border-r border-white/[0.08] bg-[#0c281a]/80 px-7">
+				<div>
+					<p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-[#e1b943]">Onze</p>
+					<p className="mt-1 text-[24px] font-semibold leading-none text-white">Sponsors</p>
+				</div>
+			</div>
+
 			<div
-				className="flex flex-col will-change-transform"
+				className="relative flex min-w-0 items-center overflow-hidden px-4"
 				style={{
-					animation: `${reverse ? "outdoor-sponsors-down" : "outdoor-sponsors-up"} ${duration}s linear infinite`,
+					maskImage: "linear-gradient(to right, transparent 0, black 4%, black 96%, transparent 100%)",
+					WebkitMaskImage: "linear-gradient(to right, transparent 0, black 4%, black 96%, transparent 100%)",
 				}}
 			>
-				{[0, 1].map((copy) => (
-					<div key={copy} className="flex flex-col gap-3 pb-3" aria-hidden={copy === 1}>
-						{sponsors.map((sponsor) => (
-							<div
-								key={`${copy}-${sponsor.id}`}
-								className="flex h-[132px] shrink-0 flex-col items-center justify-center rounded-[17px] border border-[#dfe5dd] bg-[#f8faf6] px-4 py-3 text-center shadow-[0_12px_30px_rgba(0,0,0,0.2)]"
-							>
-								<img
-									src={sponsor.image}
-									alt={sponsor.name}
-									className="max-h-[80px] w-full object-contain"
-									decoding="async"
-								/>
-								<span className="mt-2 line-clamp-1 w-full text-[11px] font-semibold tracking-wide text-[#476052]">
-									{sponsor.name}
-								</span>
-							</div>
-						))}
-					</div>
-				))}
+				<div
+					className="flex w-max will-change-transform"
+					style={{ animation: `outdoor-sponsors-left ${duration}s linear infinite` }}
+				>
+					{[0, 1].map((copy) => (
+						<div key={copy} className="flex shrink-0 gap-4 pr-4" aria-hidden={copy === 1}>
+							{sponsors.map((sponsor) => (
+								<div
+									key={`${copy}-${sponsor.id}`}
+									className="flex h-[116px] w-[220px] shrink-0 flex-col items-center justify-center rounded-[17px] border border-[#dfe5dd] bg-[#f8faf6] px-5 py-3 text-center shadow-[0_12px_30px_rgba(0,0,0,0.2)]"
+								>
+									<img
+										src={sponsor.image}
+										alt={sponsor.name}
+										className="max-h-[70px] w-full object-contain"
+										decoding="async"
+									/>
+									<span className="mt-1.5 line-clamp-1 w-full text-[10px] font-semibold tracking-wide text-[#476052]">
+										{sponsor.name}
+									</span>
+								</div>
+							))}
+						</div>
+					))}
+				</div>
 			</div>
 		</aside>
+	);
+}
+
+function InformationPlaceholder({ title, eyebrow, icon: Icon, warm = false }) {
+	return (
+		<section
+			className={`relative h-full overflow-hidden rounded-[24px] border p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_50px_rgba(0,0,0,0.2)] ${
+				warm
+					? "border-[#d9c69b]/30 bg-[linear-gradient(145deg,#f1dfb8_0%,#dfc17e_100%)] text-[#173120]"
+					: "border-white/[0.09] bg-[linear-gradient(145deg,#164a31_0%,#0b2d1d_100%)] text-white"
+			}`}
+		>
+			<div className={`absolute -right-16 -top-16 h-56 w-56 rounded-full border ${warm ? "border-[#173120]/10" : "border-white/10"}`} />
+			<div className={`absolute -right-7 -top-7 h-36 w-36 rounded-full border ${warm ? "border-[#173120]/10" : "border-white/10"}`} />
+
+			<div className="relative flex h-full flex-col">
+				<div className="flex items-start justify-between gap-4">
+					<div>
+						<p className={`text-[10px] font-semibold uppercase tracking-[0.32em] ${warm ? "text-[#6a5727]" : "text-[#e1b943]"}`}>
+							{eyebrow}
+						</p>
+						<h2 className="mt-2 text-[36px] font-semibold leading-none">{title}</h2>
+					</div>
+					<div className={`flex h-14 w-14 items-center justify-center rounded-[17px] border ${warm ? "border-[#173120]/10 bg-white/30" : "border-white/10 bg-white/[0.07]"}`}>
+						<Icon className="h-6 w-6" strokeWidth={1.8} />
+					</div>
+				</div>
+
+				<div className={`mt-8 flex-1 rounded-[18px] border border-dashed ${warm ? "border-[#173120]/15 bg-white/10" : "border-white/10 bg-black/[0.08]"}`} />
+			</div>
+		</section>
 	);
 }
 
@@ -509,9 +555,6 @@ export default function OutdoorGames() {
 	const totalScheduledOnFields = FIELD_LAYOUT.reduce((total, fieldConfig) => {
 		return total + pickFieldMatches(assignedMatches, fieldConfig).allMatches.length;
 	}, 0);
-	const leftSponsors = sponsors.filter((_, index) => index % 2 === 0);
-	const rightSponsors = sponsors.filter((_, index) => index % 2 === 1);
-
 	return (
 		<>
 			<Head>
@@ -521,78 +564,68 @@ export default function OutdoorGames() {
 
 			<KioskStage>
 				<div className="flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#071a12_0%,#0b291b_34%,#102f1f_100%)] px-[34px] py-5 text-white">
-					<header className="grid grid-cols-[238px_minmax(0,1fr)_238px] gap-[26px]">
-						<div className="flex items-center justify-center text-[11px] font-semibold uppercase tracking-[0.34em] text-white/45">
-							Partners
-						</div>
-
-						<div className="flex items-center justify-between gap-4">
+					<header className="flex items-center justify-between gap-8">
+						<div className="flex items-center gap-3">
 						
-							<div className="flex items-center gap-3">
-								<div className="rounded-[12px] border border-white/[0.12] bg-white p-1">
-									<Image src="/cartouche.png" alt="Cartouche logo" width={40} height={40} />
-								</div>
-								<h1 className="text-[32px] font-semibold leading-none">
-									Sportpark Duivesteyn
-								</h1>
+							<div className="rounded-[12px] border border-white/[0.12] bg-white p-1">
+								<Image src="/cartouche.png" alt="Cartouche logo" width={40} height={40} />
 							</div>
-
-							<div className="mt-2 flex flex-col gap-1 text-[13px] text-white/[0.76]">
-								<span className="flex items-center gap-1.5">
-									<MapPinned className="h-4 w-4" />
-									Sportpark DuiveSteyn
-								</span>
-								<span className="flex items-center gap-1.5">
-									<Clock3 className="h-4 w-4" />
-									{format(currentTime, "EEEE d MMMM • HH:mm")}
-								</span>
-							</div>
+							<h1 className="text-[32px] font-semibold leading-none">
+								V.M.H.C. Cartouche
+							</h1>
 						</div>
 
-						<div className="flex items-center justify-center text-[11px] font-semibold uppercase tracking-[0.34em] text-white/45">
-							Partners
+						<div className="flex flex-col gap-1 text-[13px] text-white/[0.76]">
+							<span className="flex items-center gap-1.5">
+								<MapPinned className="h-4 w-4" />
+								V.M.H.C. Cartouche
+							</span>
+							<span className="flex items-center gap-1.5">
+								<Clock3 className="h-4 w-4" />
+								{format(currentTime, "EEEE d MMMM • HH:mm")}
+							</span>
 						</div>
 					</header>
 
-					<main className="mt-4 grid min-h-0 flex-1 grid-cols-[238px_minmax(0,1fr)_238px] gap-[26px] overflow-hidden">
-						<SponsorRail sponsors={leftSponsors} />
+					<main className="mt-4 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_148px] gap-7 overflow-hidden">
+						<div className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_420px] gap-[26px]">
+							<div className="grid min-h-0 min-w-0 grid-cols-3 gap-7">
+								<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
+									<FieldCard fieldConfig={FIELD_LAYOUT[0]} matches={assignedMatches} />
+									<FieldCard fieldConfig={FIELD_LAYOUT[1]} matches={assignedMatches} />
+									<FieldCard fieldConfig={FIELD_LAYOUT[2]} matches={assignedMatches} />
+								</div>
 
-						<div className="grid min-w-0 grid-cols-3 gap-7">
-							<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
-								<FieldCard fieldConfig={FIELD_LAYOUT[0]} matches={assignedMatches} />
-								<FieldCard fieldConfig={FIELD_LAYOUT[1]} matches={assignedMatches} />
-								<FieldCard fieldConfig={FIELD_LAYOUT[2]} matches={assignedMatches} />
+								<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
+									<FieldCard fieldConfig={FIELD_LAYOUT[3]} matches={assignedMatches} />
+
+									<UtilityCard title="Clubhuis" />
+
+									<UtilityCard title="Fietsenstalling" muted />
+								</div>
+
+								<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
+									<FieldCard fieldConfig={FIELD_LAYOUT[4]} matches={assignedMatches} />
+									<FieldCard fieldConfig={FIELD_LAYOUT[5]} matches={assignedMatches} />
+									<FieldCard fieldConfig={FIELD_LAYOUT[6]} matches={assignedMatches} />
+								</div>
 							</div>
 
-							<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
-								<FieldCard fieldConfig={FIELD_LAYOUT[3]} matches={assignedMatches} />
-
-								<UtilityCard title="Clubhuis" />
-
-								<UtilityCard title="Fietsenstalling" muted />
-							</div>
-
-							<div className="grid h-full grid-rows-[1fr_0.64fr_1fr] gap-7">
-								<FieldCard fieldConfig={FIELD_LAYOUT[4]} matches={assignedMatches} />
-								<FieldCard fieldConfig={FIELD_LAYOUT[5]} matches={assignedMatches} />
-								<FieldCard fieldConfig={FIELD_LAYOUT[6]} matches={assignedMatches} />
-							</div>
+							<aside className="grid min-h-0 grid-rows-2 gap-7">
+								<InformationPlaceholder title="Nieuws" eyebrow="Clubnieuws" icon={Newspaper} />
+								<InformationPlaceholder title="Agenda" eyebrow="Binnenkort" icon={CalendarDays} warm />
+							</aside>
 						</div>
 
-						<SponsorRail sponsors={rightSponsors} reverse />
+						<SponsorStrip sponsors={sponsors} />
 					</main>
 				</div>
 			</KioskStage>
 
 			<style jsx global>{`
-				@keyframes outdoor-sponsors-up {
-					from { transform: translateY(0); }
-					to { transform: translateY(-50%); }
-				}
-
-				@keyframes outdoor-sponsors-down {
-					from { transform: translateY(-50%); }
-					to { transform: translateY(0); }
+				@keyframes outdoor-sponsors-left {
+					from { transform: translateX(0); }
+					to { transform: translateX(-50%); }
 				}
 			`}</style>
 		</>
