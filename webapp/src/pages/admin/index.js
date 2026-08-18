@@ -167,7 +167,7 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 	);
 }
 
-export default function AdminPage({ initialSponsors, admin }) {
+export default function AdminPage({ initialSponsors }) {
 	const [sponsors, setSponsors] = useState(initialSponsors);
 	const [query, setQuery] = useState("");
 	const [editing, setEditing] = useState(undefined);
@@ -232,7 +232,7 @@ export default function AdminPage({ initialSponsors, admin }) {
 							</div>
 						</div>
 						<div className="flex items-center gap-3">
-							<div className="hidden text-right sm:block"><p className="text-sm font-semibold">{admin.name}</p><p className="text-xs text-white/55">{admin.email}</p></div>
+							<div className="hidden text-right sm:block"><p className="text-sm font-semibold">Clubbeheer</p><p className="text-xs text-white/55">Gedeelde toegang</p></div>
 							<button onClick={signOut} className="rounded-xl border border-white/15 p-2.5 text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Uitloggen"><LogOut className="h-5 w-5" /></button>
 						</div>
 					</div>
@@ -309,7 +309,6 @@ export async function getServerSideProps(context) {
 	return {
 		props: {
 			initialSponsors: JSON.parse(JSON.stringify(sponsors)),
-			admin: { name: session.user.name, email: session.user.email },
 		},
 	};
 }

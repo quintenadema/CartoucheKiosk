@@ -17,9 +17,9 @@ De oorspronkelijke AnotterKiosk-code en licentie blijven herkenbaar aanwezig. Bi
 
 Eén Raspberry Pi stuurt twee schermen aan. De concrete pagina per scherm wordt in `kioskbrowser.ini` ingesteld. Mogelijke routes zijn:
 
-- `https://cartouche-dome.vercel.app/indoor`
-- `https://cartouche-dome.vercel.app/outdoor`
-- `https://cartouche-dome.vercel.app/sponsors`
+- `https://cartouche-kiosk.vercel.app/indoor`
+- `https://cartouche-kiosk.vercel.app/outdoor`
+- `https://cartouche-kiosk.vercel.app/sponsors`
 
 Voorbeeld met twee horizontale Full HD-schermen:
 
@@ -43,11 +43,11 @@ mode="1920x1080"
 rotate="normal"
 
 [browser1]
-url="https://cartouche-dome.vercel.app/indoor"
+url="https://cartouche-kiosk.vercel.app/indoor"
 output="HDMI-1"
 
 [browser2]
-url="https://cartouche-dome.vercel.app/sponsors"
+url="https://cartouche-kiosk.vercel.app/sponsors"
 output="HDMI-2"
 ```
 
@@ -55,7 +55,7 @@ Outputnamen kunnen per Raspberry Pi OS/Chromium-versie verschillen. Controleer z
 
 ## Tailscale remote beheer
 
-Tailscale is in het image geïnstalleerd maar standaard uitgeschakeld. De Pi blijft daardoor lokaal functioneren als Tailscale nog niet is ingericht.
+Tailscale is in het image geïnstalleerd en staat in de Cartouche-configuratie aan. Een nieuwe Pi registreert pas nadat een eenmalige auth-key op de bootpartitie is geplaatst. Zet `enabled=0` voor een generiek image dat zonder Tailscale moet starten; de kiosk blijft dan lokaal functioneren.
 
 ### Eerste registratie
 
@@ -75,6 +75,8 @@ Tailscale is in het image geïnstalleerd maar standaard uitgeschakeld. De Pi bli
 5. Controleer in de Tailscale Admin Console of de node de ingestelde Cartouche-hostname heeft.
 
 De blijvende Tailscale-node-identiteit staat in `/boot/firmware/tailscale/tailscaled.state`. Alleen de kleine FAT-configuratiepartitie is hiervoor beschrijfbaar; de Linux-rootpartitie blijft read-only. Bewaar nooit een herbruikbare Tailscale-key op de bootpartitie.
+
+De bootpartitie moet tijdens normaal gebruik met `rw` gemount blijven. `kiosk-init` en `kiosk-ssh-keys` laten deze partitie daarom schrijfbaar, zodat `tailscaled` zijn node-identiteit kan aanmaken en bijwerken. Controleer dit bij problemen met `findmnt -no OPTIONS /boot/firmware`; de uitvoer moet `rw` bevatten.
 
 OpenSSH is al aanwezig. Als de tailnet-ACL verkeer toestaat, kan een beheerder verbinden met:
 
@@ -107,7 +109,41 @@ De hoofdentrypoint is:
 sudo ./build_raspberry_pi.sh <RASPIOS_URL> <SHA256> arm64-raspberrypi
 ```
 
+Op een Apple Silicon-Mac kan dezelfde arm64-build in een privileged Docker
+Desktop-container draaien:
+
+```bash
+docker build -f Dockerfile.build -t cartouche-kiosk-builder:trixie .
+docker run --rm --privileged \
+  -v "$PWD/..:/workspace" \
+  -w /workspace/kiosk-os \
+  cartouche-kiosk-builder:trixie \
+  ./build_raspberry_pi.sh <RASPIOS_URL> <SHA256> arm64-raspberrypi
+```
+
 De exacte Raspberry Pi OS-URL en SHA256 veranderen in de tijd. Leg bij een release vast welke upstream image, commit en architectuur zijn gebruikt. Test een nieuw image altijd fysiek met twee schermen voordat het op locatie wordt vervangen.
+
+## Kiosk op een Mac simuleren
+
+De Docker-simulator voert dezelfde `kioskbrowser.ini`, Openbox-autostart en
+Chromium-kioskflags uit als het Raspberry Pi-image. Het virtuele scherm is via
+noVNC in de browser te bekijken:
+
+```bash
+docker build -f simulator/Dockerfile -t cartouche-kiosk-simulator .
+docker run --rm --name cartouche-kiosk-simulator \
+  --shm-size=1g \
+  -p 127.0.0.1:6080:6080 \
+  cartouche-kiosk-simulator
+```
+
+Open daarna
+`http://localhost:6080/vnc.html?autoconnect=1&resize=scale`.
+
+De simulator test de configuratieparser, Openbox-start, Chromium-flags en de
+uiteindelijke webpagina. Raspberry Pi-firmware, HDMI-detectie, hardwarematige
+GPU-versnelling, het read-only bestandssysteem en Tailscale-registratie worden
+niet door Docker geëmuleerd en moeten op de fysieke Pi worden gecontroleerd.
 
 ## Wijzigingen ten opzichte van upstream bewaken
 
@@ -115,8 +151,9 @@ Let bij updates vooral op:
 
 - `kiosk_skeleton/boot/firmware/kioskbrowser.ini` — configuratieformaat;
 - Openbox/X11-startscripts — multi-screenindeling en browservensters;
-- `kiosk_skeleton/build.sh` — Tailscale-repository en packages;
+- `kiosk_skeleton/build.sh` — Tailscale-packages, login-shell en eigenaarschap voor de `pi`-kiosksessie;
 - `kiosk-tailscale` en de systemd-overrides — blijvende state op de bootpartitie;
+- `etc/chromium/policies/managed/kiosk.json` — onderdrukking van Chromium-vertaalinterface;
 - `raspberry_pi_skeleton/etc/fstab` — read-only root en schrijfbare configuratiepartitie.
 
 ---
@@ -283,6 +320,9 @@ setInterval(function() {
 ```
 
 Whenever the heartbeat stops (for whatever reason), the device will first restart the X11 environment (browser, window manager, etc.) and later (if it hasn't recovered) the whole system by rebooting.
+
+> [!IMPORTANT]
+> De Cartouche-pagina draait extern via HTTPS en verstuurt geen heartbeat naar de lokale HTTP-endpoint. Daarom staat `[watchdog] enabled=0` in de Cartouche-configuratie. Schakel deze watchdog pas in wanneer de getoonde pagina aantoonbaar periodiek `http://localhost/heartbeat.php` kan bereiken; zonder heartbeat wordt het netwerk iedere `timeout` seconden herstart en de Pi na `timeout_reboot` seconden gereboot.
 
 ## Local webserver
 AnotterKiosk ships with an nginx webserver and a PHP runtime by default (which is used internally for the heartbeat mechanism).  

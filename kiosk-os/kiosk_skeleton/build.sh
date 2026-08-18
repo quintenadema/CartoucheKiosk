@@ -45,6 +45,11 @@ apt remove -y network-manager || true
 chown -hR 0:0 /etc/sudoers.d/
 chown -hR www-data:www-data /var/www/html/
 
+# Current Raspberry Pi OS images can ship the pre-created pi account with a
+# nologin shell. LightDM autologin requires a real shell for the kiosk session.
+usermod --shell /bin/bash pi
+chown -hR 1000:1000 /home/pi
+
 mkdir -p /home/pi/.config/chromium/
 chown -hR 1000:1000 /home/pi/.config/chromium/
 mkdir -p /home/pi/.cache

@@ -21,7 +21,17 @@ export const auth = betterAuth({
 		expiresIn: 60 * 60 * 12,
 		updateAge: 60 * 60,
 	},
+	rateLimit: {
+		enabled: true,
+		storage: "database",
+		customRules: {
+			"/sign-in/email": { window: 60, max: 5 },
+		},
+	},
 	advanced: {
 		useSecureCookies: process.env.NODE_ENV === "production",
+		ipAddress: {
+			ipAddressHeaders: ["x-real-ip"],
+		},
 	},
 });

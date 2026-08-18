@@ -12,7 +12,9 @@ mkdir -p /dev/shm
 mkdir -p /dev/pts
 mount /dev/shm
 mount devpts /dev/pts -t devpts
-mount -o ro /boot/firmware
+# The FAT partition stores the kiosk configuration and persistent Tailscale
+# identity. Keep it writable; only the Linux root filesystem is read-only.
+mount -o rw /boot/firmware
 mount -a
 
 if [ ! -f /boot/firmware/splash.png ]; then

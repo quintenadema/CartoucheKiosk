@@ -1,0 +1,18 @@
+FROM debian:trixie-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		ca-certificates \
+		curl \
+		e2fsprogs \
+		fdisk \
+		git \
+		rsync \
+		sudo \
+		util-linux \
+		wget \
+		xz-utils \
+		zerofree \
+	&& rm -rf /var/lib/apt/lists/*

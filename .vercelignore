@@ -1,0 +1,6 @@
+kiosk-os/
+.webapp-git-backup/
+webapp/node_modules/
+webapp/.next/
+webapp/output/
+webapp/.playwright-cli/

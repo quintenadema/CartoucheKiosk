@@ -1,5 +1,5 @@
 {
-  "name": "cartouche-dome",
+  "name": "cartouche-kiosk",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "db:migrate": "bun --env-file=.env.local scripts/migrate.mjs",
     "admin:create": "bun --env-file=.env.local scripts/create-admin.mjs",
+    "admin:password": "bun --env-file=.env.local scripts/set-admin-password.mjs",
     "sponsors:import": "bun --env-file=.env.local scripts/import-sponsors.mjs"
   },
   "dependencies": {

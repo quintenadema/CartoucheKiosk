@@ -12,7 +12,6 @@ AUTH_KEY_FILE=$(get-ini "${CONFIG_FILE}" tailscale auth_key_file /boot/firmware/
 ACCEPT_DNS=$(get-ini "${CONFIG_FILE}" tailscale accept_dns 0 || true)
 TAILSCALE_SSH=$(get-ini "${CONFIG_FILE}" tailscale tailscale_ssh 0 || true)
 HOSTNAME=$(get-ini "${CONFIG_FILE}" general hostname kioskpi || true)
-STATE_FILE="/boot/firmware/tailscale/tailscaled.state"
 
 mkdir -p /boot/firmware/tailscale
 systemctl start tailscaled.service
@@ -24,7 +23,9 @@ UP_ARGS=(
 	"--timeout=45s"
 )
 
-if [ ! -s "${STATE_FILE}" ]; then
+# tailscaled creates its state file before a node is authenticated, so the
+# presence of that file does not prove that registration has completed.
+if ! tailscale ip -4 >/dev/null 2>&1; then
 	if [ ! -s "${AUTH_KEY_FILE}" ]; then
 		echo "Tailscale is enabled, but no auth key exists at ${AUTH_KEY_FILE}" >&2
 		exit 1
@@ -34,7 +35,7 @@ fi
 
 tailscale up "${UP_ARGS[@]}"
 
-# A one-off key is no longer needed after the persistent node state exists.
-if [ -s "${STATE_FILE}" ] && [ -f "${AUTH_KEY_FILE}" ]; then
+# A one-off key is no longer needed after the node has a Tailscale address.
+if tailscale ip -4 >/dev/null 2>&1 && [ -f "${AUTH_KEY_FILE}" ]; then
 	: > "${AUTH_KEY_FILE}"
 fi

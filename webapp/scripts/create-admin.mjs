@@ -19,19 +19,21 @@ function readHidden(promptText) {
 			resolve(value);
 		};
 
-		const onData = (character) => {
-			if (character === "\u0003") {
-				process.stdin.setRawMode(false);
-				process.stdin.pause();
-				reject(new Error("Afgebroken"));
-				return;
+		const onData = (input) => {
+			for (const character of input) {
+				if (character === "\u0003") {
+					process.stdin.setRawMode(false);
+					process.stdin.pause();
+					reject(new Error("Afgebroken"));
+					return;
+				}
+				if (character === "\r" || character === "\n") return finish();
+				if (character === "\u007f") {
+					value = value.slice(0, -1);
+					continue;
+				}
+				value += character;
 			}
-			if (character === "\r" || character === "\n") return finish();
-			if (character === "\u007f") {
-				value = value.slice(0, -1);
-				return;
-			}
-			value += character;
 		};
 
 		process.stdin.on("data", onData);

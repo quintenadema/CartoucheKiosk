@@ -330,12 +330,12 @@ do
 			 --autoplay-policy=no-user-gesture-required \
 			 --check-for-update-interval=1 \
 			 --disable-component-update \
-			 --disable-features=Translate \
-			 --disable-features=TranslateUI \
+			 --disable-features=Translate,TranslateUI \
 			 --disable-infobars \
 			 --disable-pinch \
 			 --disable-session-crashed-bubble \
 			 --disable-smooth-scrolling \
+			 --disable-translate \
 			 --kiosk \
 			 --noerrdialogs \
 			 --overscroll-history-navigation=0 \

@@ -3,11 +3,9 @@ import Image from "next/image";
 import { ArrowRight, LockKeyhole } from "lucide-react";
 import { useRouter } from "next/router";
 import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
 
 export default function AdminLogin() {
 	const router = useRouter();
-	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
@@ -17,14 +15,18 @@ export default function AdminLogin() {
 		setLoading(true);
 		setError("");
 
-		const result = await authClient.signIn.email({
-			email,
-			password,
-			rememberMe: false,
+		const response = await fetch("/api/admin/login", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ password }),
 		});
 
-		if (result.error) {
-			setError("De combinatie van e-mailadres en wachtwoord klopt niet.");
+		if (!response.ok) {
+			setError(
+				response.status === 429
+					? "Te veel inlogpogingen. Wacht even en probeer het opnieuw."
+					: "Het wachtwoord klopt niet."
+			);
 			setLoading(false);
 			return;
 		}
@@ -68,20 +70,9 @@ export default function AdminLogin() {
 						</div>
 						<p className="text-xs font-bold uppercase tracking-[0.24em] text-[#917110]">Beveiligde omgeving</p>
 						<h1 className="mt-3 text-4xl font-semibold tracking-tight">Welkom terug</h1>
-						<p className="mt-3 text-base text-[#526057]">Log in om sponsoren en hun zichtbaarheid op de schermen te beheren.</p>
+						<p className="mt-3 text-base text-[#526057]">Vul het gezamenlijke clubwachtwoord in om de sponsoren op de schermen te beheren.</p>
 
 						<form className="mt-9 space-y-5" onSubmit={handleSubmit}>
-							<label className="block">
-								<span className="mb-2 block text-sm font-semibold">E-mailadres</span>
-								<input
-									type="email"
-									autoComplete="username"
-									value={email}
-									onChange={(event) => setEmail(event.target.value)}
-									required
-									className="w-full rounded-xl border border-[#c9c3b5] bg-white px-4 py-3.5 outline-none transition focus:border-[#0c4a2c] focus:ring-4 focus:ring-[#0c4a2c]/10"
-								/>
-							</label>
 							<label className="block">
 								<span className="mb-2 block text-sm font-semibold">Wachtwoord</span>
 								<input

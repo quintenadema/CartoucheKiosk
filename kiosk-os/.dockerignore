@@ -1,6 +1,6 @@
+anotterkiosk-*.img
+anotterkiosk-*.img.xz
 raspikiosk.img
 raspios.img.xz
-anotterkiosk-*-raspberrypi.img.xz
 version-info
 work/
-.DS_Store

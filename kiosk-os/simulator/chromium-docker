@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# Chromium's normal Linux sandbox cannot initialize inside Docker Desktop.
+# All production flags still come from the real Openbox autostart script.
+exec /usr/bin/chromium --no-sandbox "$@"

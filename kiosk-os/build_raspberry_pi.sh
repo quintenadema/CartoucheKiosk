@@ -14,14 +14,16 @@ BUILD_DIR="${SCRIPT_DIR}/work/root/"
 
 # cleanup any previous build attempts
 umount -fl "${BUILD_DIR}" || true
-losetup -D /dev/loop0 || true
+for LOOP_DEVICE in /dev/loop1 /dev/loop2
+do
+	losetup -d "${LOOP_DEVICE}" || true
+done
 rm -rf "${BUILD_DIR}" || true
 mkdir -p "${BUILD_DIR}"
 
-# delete any old image (comment this when testing locally)
-rm raspios.img.xz || true
-
-# download a modern RaspiOS build
+# Download a modern RaspiOS build. Keep a verified download between build
+# attempts; this saves several minutes when a later image-customization step
+# needs to be retried.
 if [ ! -f raspios.img.xz ]
 then
 	wget -nv -O raspios.img.xz "${RASPIOS_URL}"
@@ -41,14 +43,24 @@ mv raspios.img raspikiosk.img
 truncate -s +3G raspikiosk.img
 echo ", +" | sfdisk -N2 ./raspikiosk.img
 
-# Setup loop device for Raspberry Pi image (with partition scanning)
-sudo losetup -P /dev/loop0 raspikiosk.img
+# Map both partitions to explicit loop devices. This also works in Docker
+# Desktop, where partition devices created through `losetup -P` cannot always
+# be mounted from inside a privileged container.
+BOOT_PARTITION=$(sfdisk -d raspikiosk.img | grep 'raspikiosk.img1 :')
+ROOT_PARTITION=$(sfdisk -d raspikiosk.img | grep 'raspikiosk.img2 :')
+BOOT_START=$(echo "${BOOT_PARTITION}" | sed -E 's/.*start= *([0-9]+).*/\1/')
+BOOT_SIZE=$(echo "${BOOT_PARTITION}" | sed -E 's/.*size= *([0-9]+).*/\1/')
+ROOT_START=$(echo "${ROOT_PARTITION}" | sed -E 's/.*start= *([0-9]+).*/\1/')
+ROOT_SIZE=$(echo "${ROOT_PARTITION}" | sed -E 's/.*size= *([0-9]+).*/\1/')
+
+sudo losetup --offset "$((BOOT_START * 512))" --sizelimit "$((BOOT_SIZE * 512))" /dev/loop1 raspikiosk.img
+sudo losetup --offset "$((ROOT_START * 512))" --sizelimit "$((ROOT_SIZE * 512))" /dev/loop2 raspikiosk.img
 
 # Resize partition
-sudo resize2fs /dev/loop0p2
+sudo resize2fs /dev/loop2
 
 # Manually set PARTUUID to 0x23421312
-sudo fdisk /dev/loop0 <<EOF > /dev/null
+sudo fdisk raspikiosk.img <<EOF > /dev/null
 p
 x
 i
@@ -59,8 +71,8 @@ w
 EOF
 
 # Mount partitions
-sudo mount /dev/loop0p2 "${BUILD_DIR}"
-sudo mount /dev/loop0p1 "${BUILD_DIR}/boot/firmware"
+sudo mount /dev/loop2 "${BUILD_DIR}"
+sudo mount /dev/loop1 "${BUILD_DIR}/boot/firmware"
 
 # Copy the (raspberry pi-specific) skeleton files
 sudo rsync -a "${SCRIPT_DIR}/raspberry_pi_skeleton/." "${BUILD_DIR}" || true
@@ -106,9 +118,10 @@ sudo umount "${BUILD_DIR}/boot/firmware" || true
 sudo umount "${BUILD_DIR}" || true
 
 # set all empty blocks on ext4 to 0x00 (for better compression)
-sudo zerofree /dev/loop0p2
+sudo zerofree /dev/loop2
 
-sudo losetup -D /dev/loop0
+sudo losetup -d /dev/loop1
+sudo losetup -d /dev/loop2
 
 tag=$(git describe --abbrev=4 --dirty --always --tags)
 mv raspikiosk.img anotterkiosk-${tag}-${IMAGE_SUFFIX}.img

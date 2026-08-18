@@ -30,8 +30,8 @@ De Raspberry Pi bevat geen sponsorcontent. Hij opent alleen de ingestelde webpag
 
 ## Productieomgevingen en eigenaarschap
 
-- Vercel-project: `adema-group/cartouche-dome`
-- Productie-URL: [cartouche-dome.vercel.app](https://cartouche-dome.vercel.app)
+- Vercel-project: `adema-group/cartouche-kiosk`
+- Productie-URL: [cartouche-kiosk.vercel.app](https://cartouche-kiosk.vercel.app)
 - Neon-project: `cartouche-dome`, regio Frankfurt (`aws-eu-central-1`)
 - Vercel Blob-store: `cartouche-sponsors`, regio Frankfurt (`fra1`), publieke leesmodus
 - GitHub-repository: `quintenadema/CartoucheKiosk`
@@ -46,7 +46,7 @@ Voor JavaScript wordt in dit project Bun gebruikt.
 ```bash
 cd webapp
 bun install
-bunx --bun vercel@latest link --project cartouche-dome --scope adema-group
+bunx --bun vercel@latest link --project cartouche-kiosk --scope adema-group
 bunx --bun vercel@latest env pull .env.local --environment=development
 bun run dev
 ```
@@ -80,7 +80,7 @@ Meer informatie over databasebeheer, het aanmaken van beheerders en deployments 
 Geef een opvolger toegang tot de volgende vier omgevingen; alleen toegang tot GitHub is niet voldoende:
 
 1. GitHub-repository `quintenadema/CartoucheKiosk`;
-2. Vercel-team **ADEMA Group** en project `cartouche-dome`;
+2. Vercel-team **ADEMA Group** en project `cartouche-kiosk`;
 3. Neon-organisatie en project `cartouche-dome`;
 4. de Tailscale tailnet waarin de kiosk-Pi is opgenomen.
 
