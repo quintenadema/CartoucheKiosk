@@ -9,13 +9,13 @@ Het systeem is bewust in één repository ondergebracht. Een toekomstige beheerd
 | Map | Functie | Draait op |
 | --- | --- | --- |
 | [`kiosk-os`](./kiosk-os) | Bouwt een betrouwbaar, read-only Raspberry Pi kiosk-image met ondersteuning voor meerdere schermen en Tailscale | Raspberry Pi bij HC Cartouche |
-| [`webapp`](./webapp) | Next.js-webapp met `/indoor`, `/outdoor`, `/sponsors` en beveiligd sponsorbeheer op `/admin` | Vercel, team **ADEMA Group** |
+| [`webapp`](./webapp) | Next.js-webapp met `/indoor`, `/outdoor`, `/sponsors` en beveiligd sponsorbeheer op `/` | Vercel, team **ADEMA Group** |
 
 ## Architectuur
 
 ```mermaid
 flowchart LR
-    A["Beheerder"] -->|"Better Auth login"| B["/admin op Vercel"]
+    A["Beheerder"] -->|"Better Auth login"| B["/ op Vercel"]
     B --> C["Neon Postgres<br/>sponsoren + accounts + sessies"]
     B --> D["Vercel Blob<br/>sponsorlogo's"]
     E["Raspberry Pi<br/>Cartouche Kiosk OS"] --> F["Scherm 1"]
@@ -51,7 +51,7 @@ bunx --bun vercel@latest env pull .env.local --environment=development
 bun run dev
 ```
 
-Open daarna [localhost:3000/indoor](http://localhost:3000/indoor), [localhost:3000/outdoor](http://localhost:3000/outdoor), [localhost:3000/sponsors](http://localhost:3000/sponsors) of [localhost:3000/admin](http://localhost:3000/admin).
+Open daarna [localhost:3000/indoor](http://localhost:3000/indoor), [localhost:3000/outdoor](http://localhost:3000/outdoor), [localhost:3000/sponsors](http://localhost:3000/sponsors) of [localhost:3000](http://localhost:3000).
 
 Meer informatie over databasebeheer, het aanmaken van beheerders en deployments staat in [`webapp/README.md`](./webapp/README.md).
 
@@ -69,7 +69,7 @@ Meer informatie over databasebeheer, het aanmaken van beheerders en deployments 
 
 ## Regulier beheer
 
-- Sponsor toevoegen of wijzigen: log in op `/admin`.
+- Sponsor toevoegen of wijzigen: log in op `/`.
 - Wedstrijdschermen controleren: open `/indoor` en `/outdoor` rechtstreeks in een normale browser.
 - Pi bereiken: gebruik het Tailscale-IP of de MagicDNS-naam en SSH als gebruiker `pi`.
 - Kioskconfiguratie wijzigen: pas `kioskbrowser.ini` op de bootpartitie aan en herstart de Pi.
@@ -84,7 +84,7 @@ Geef een opvolger toegang tot de volgende vier omgevingen; alleen toegang tot Gi
 3. Neon-organisatie en project `cartouche-dome`;
 4. de Tailscale tailnet waarin de kiosk-Pi is opgenomen.
 
-Controleer bij overdracht ook `ADMIN_EMAILS` in Vercel. Alleen e-mailadressen uit die komma-gescheiden lijst krijgen toegang tot `/admin`, óók als er al een Better Auth-account bestaat.
+Controleer bij overdracht ook `ADMIN_EMAILS` in Vercel. Alleen e-mailadressen uit die komma-gescheiden lijst krijgen toegang tot `/`, óók als er al een Better Auth-account bestaat.
 
 ## Storingen in het kort
 
@@ -94,7 +94,7 @@ Controleer bij overdracht ook `ADMIN_EMAILS` in Vercel. Alleen e-mailadressen ui
 | Eén scherm is verkeerd geplaatst | Outputnamen met `xrandr`; vergelijk met `[screenN]` en `[browserN]` |
 | Sponsorpagina is leeg | Vercel runtime logs, `DATABASE_URL`, Neon-status en tabel `sponsors` |
 | Logo-upload faalt | `BLOB_READ_WRITE_TOKEN`, Blob-storekoppeling en bestandstype/grootte |
-| `/admin` blijft naar login sturen | Better Auth-tabellen, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` en `ADMIN_EMAILS` |
+| `/` blijft naar login sturen | Better Auth-tabellen, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` en `ADMIN_EMAILS` |
 | Pi niet via Tailscale bereikbaar | `systemctl status kiosk-tailscale tailscaled` en `tailscale status` |
 
 Gedetailleerde procedures staan in de README van het betreffende onderdeel.

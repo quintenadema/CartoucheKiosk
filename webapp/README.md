@@ -9,8 +9,8 @@ De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cart
 | `/indoor` | Wedstrijden in de Cartouche Hockey Dome | Publiek, kioskweergave |
 | `/outdoor` | Veldindeling en buitenwedstrijden, met horizontale sponsorcarrousel en uitgelichte sponsormomenten | Publiek, kioskweergave |
 | `/sponsors` | Doorlopende sponsorcarrousel | Publiek, kioskweergave |
-| `/admin/login` | Login met het gezamenlijke clubwachtwoord | Publiek formulier |
-| `/admin` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
+| `/login` | Login met het gezamenlijke clubwachtwoord | Publiek formulier |
+| `/` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
 
 De wedstrijdgegevens worden server-side via `src/pages/api/games.js` opgehaald. Sponsoren worden door `src/pages/api/sponsors.js` uit Neon gelezen. De publieke pagina’s bevatten geen geheime database- of Blob-credentials.
 
@@ -44,8 +44,8 @@ Gebruik `.env.example` alleen als referentie. `.env.local` is door Git genegeerd
 | `DATABASE_URL` | Pooled connection string naar Neon `cartouche-dome` |
 | `BLOB_READ_WRITE_TOKEN` | Schrijftoken van Blob-store `cartouche-sponsors` |
 | `BETTER_AUTH_SECRET` | Ondertekent en versleutelt Better Auth-data; minimaal 32 willekeurige bytes |
-| `BETTER_AUTH_URL` | Canonieke URL, productie: `https://cartouche-kiosk.vercel.app` |
-| `ADMIN_EMAILS` | Komma-gescheiden allowlist voor `/admin` |
+| `BETTER_AUTH_URL` | Canonieke URL, productie: `https://cartouche.ademagroup.com` |
+| `ADMIN_EMAILS` | Komma-gescheiden allowlist voor `/` |
 | `ADMIN_LOGIN_EMAIL` | Interne Better Auth-gebruiker achter het gezamenlijke wachtwoord; niet zichtbaar op het loginformulier |
 | `ALLOW_ADMIN_SIGNUP` | Alleen tijdelijk gebruikt door het lokale beheerdersscript; in productie uit laten |
 
@@ -73,7 +73,7 @@ De bestaande sponsoren eenmalig vanuit de clubsite naar Neon en Vercel Blob migr
 bun run sponsors:import
 ```
 
-De import slaat namen over die al in Neon bestaan en is daardoor veilig opnieuw te starten na een gedeeltelijke netwerkfout. Normaal sponsorbeheer loopt daarna uitsluitend via `/admin`; de publieke API scrape't de clubsite niet meer.
+De import slaat namen over die al in Neon bestaan en is daardoor veilig opnieuw te starten na een gedeeltelijke netwerkfout. Normaal sponsorbeheer loopt daarna uitsluitend via `/`; de publieke API scrape't de clubsite niet meer.
 
 Bij een Better Auth-upgrade moet het auth-schema opnieuw met de Better Auth CLI worden gecontroleerd voordat de packageversie wordt uitgerold. Test schemawijzigingen bij voorkeur eerst op een Neon-branch.
 
@@ -88,7 +88,7 @@ bunx --bun vercel@latest env pull .env.local --environment=development
 bun run admin:create -- beheerder@example.com "Naam Beheerder"
 ```
 
-Publieke registratie is uitgeschakeld. Productie gebruikt één intern Better Auth-account: het adres staat zowel in `ADMIN_EMAILS` als `ADMIN_LOGIN_EMAIL`, maar gebruikers zien op `/admin/login` uitsluitend het wachtwoordveld. Een bestaand Better Auth-account zonder vermelding in `ADMIN_EMAILS` krijgt geen beheerrechten.
+Publieke registratie is uitgeschakeld. Productie gebruikt één intern Better Auth-account: het adres staat zowel in `ADMIN_EMAILS` als `ADMIN_LOGIN_EMAIL`, maar gebruikers zien op `/login` uitsluitend het wachtwoordveld. Een bestaand Better Auth-account zonder vermelding in `ADMIN_EMAILS` krijgt geen beheerrechten.
 
 Het gezamenlijke wachtwoord wijzigen en alle bestaande sessies intrekken:
 
@@ -100,7 +100,7 @@ Het wachtwoord wordt verborgen ingevoerd, uitsluitend als Better Auth-hash opges
 
 ## Sponsorbeheer
 
-Een beheerder kan in `/admin`:
+Een beheerder kan in `/`:
 
 - een PNG-, JPG- of WebP-logo van maximaal 4 MB uploaden;
 - sponsornaam en optionele website instellen;
@@ -122,7 +122,7 @@ bun run build
 
 Controleer vóór deployment minimaal:
 
-- login en logout op `/admin`;
+- login en logout via `/login` en `/`;
 - sponsor toevoegen, aanpassen, verbergen en verwijderen;
 - `Uitgelicht` aanzetten, een foto uploaden en de 10-seconden-takeover op `/outdoor` controleren;
 - weergave op `/sponsors` zonder beheerderssessie;
@@ -150,7 +150,7 @@ Controleer na deployment de Build Logs en Runtime Logs in Vercel. Roll back via 
 - cookies zijn in productie secure en HTTP-only via Better Auth;
 - database- en Blob-credentials komen alleen uit omgevingsvariabelen;
 - alleen openbare sponsorlogo’s staan in de publieke Blob-store;
-- `/admin` krijgt `noindex,nofollow`.
+- `/` en `/login` krijgen `noindex,nofollow`.
 
 ## Belangrijke externe documentatie
 
