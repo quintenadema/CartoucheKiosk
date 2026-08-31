@@ -1,13 +1,10 @@
 import { upload } from "@vercel/blob/client";
 import Head from "next/head";
-import Image from "next/image";
 import {
-	ArrowUpRight,
 	Eye,
 	EyeOff,
 	ImagePlus,
 	LayoutGrid,
-	LogOut,
 	Pencil,
 	Plus,
 	Search,
@@ -16,7 +13,7 @@ import {
 	X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { authClient } from "@/lib/auth-client";
+import AdminShell from "@/components/admin-shell";
 
 const emptyForm = {
 	id: null,
@@ -39,6 +36,21 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 	const [featuredPreview, setFeaturedPreview] = useState(sponsor?.featuredImageUrl ?? "");
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
+	const [closing, setClosing] = useState(false);
+
+	function closeSheet() {
+		if (!closing) setClosing(true);
+	}
+
+	function finishClosing(event) {
+		if (
+			closing &&
+			event.currentTarget === event.target &&
+			event.animationName === "admin-sheet-out"
+		) {
+			onClose();
+		}
+	}
 
 	function chooseFile(event) {
 		const selected = event.target.files?.[0];
@@ -103,7 +115,7 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 			if (!response.ok) throw new Error(body.error || "Opslaan is mislukt");
 
 			onSaved(body.sponsor);
-			onClose();
+			closeSheet();
 		} catch (saveError) {
 			setError(saveError.message || "Opslaan is mislukt");
 		} finally {
@@ -112,15 +124,15 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 	}
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-end justify-end bg-[#04150d]/65 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true">
-			<button className="absolute inset-0 cursor-default" onClick={onClose} aria-label="Sluiten" />
-			<section className="relative h-full w-full overflow-y-auto bg-[#f7f4eb] p-6 shadow-2xl sm:max-w-xl sm:rounded-[1.75rem] sm:p-9">
+		<div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+			<button className={`admin-sheet-backdrop absolute inset-0 cursor-default bg-[#04150d]/65 backdrop-blur-sm ${closing ? "is-closing" : ""}`} onClick={closeSheet} aria-label="Sluiten" />
+			<section className={`admin-side-sheet relative h-full w-full overflow-y-auto border-l border-black/10 bg-[#f7f4eb] p-6 shadow-[-32px_0_80px_rgba(0,0,0,0.28)] sm:max-w-[640px] sm:p-9 ${closing ? "is-closing" : ""}`} onAnimationEnd={finishClosing}>
 				<div className="flex items-start justify-between gap-5">
 					<div>
 						<p className="text-xs font-bold uppercase tracking-[0.22em] text-[#9a7914]">Sponsorbeheer</p>
 						<h2 className="mt-2 text-3xl font-semibold text-[#10261a]">{form.id ? "Sponsor aanpassen" : "Sponsor toevoegen"}</h2>
 					</div>
-					<button onClick={onClose} className="rounded-full border border-[#d9d2c2] p-2.5 text-[#536158] transition hover:bg-white" aria-label="Sluiten">
+					<button onClick={closeSheet} className="rounded-full border border-[#d9d2c2] p-2.5 text-[#536158] transition hover:bg-white" aria-label="Sluiten">
 						<X className="h-5 w-5" />
 					</button>
 				</div>
@@ -218,7 +230,7 @@ function SponsorEditor({ sponsor, onClose, onSaved }) {
 					{error ? <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
 
 					<div className="flex gap-3 border-t border-[#ded8ca] pt-6">
-						<button type="button" onClick={onClose} className="flex-1 rounded-xl border border-[#bdb6a5] px-5 py-3.5 font-semibold text-[#34483a] transition hover:bg-white">Annuleren</button>
+						<button type="button" onClick={closeSheet} className="flex-1 rounded-xl border border-[#bdb6a5] px-5 py-3.5 font-semibold text-[#34483a] transition hover:bg-white">Annuleren</button>
 						<button type="submit" disabled={saving} className="flex-[1.4] rounded-xl bg-[#0c4a2c] px-5 py-3.5 font-semibold text-white transition hover:bg-[#083b22] disabled:cursor-wait disabled:opacity-60">
 							{saving ? "Opslaan…" : "Sponsor opslaan"}
 						</button>
@@ -271,11 +283,6 @@ export default function AdminPage({ initialSponsors }) {
 		else setMessage(body.error || "Zichtbaarheid aanpassen is mislukt.");
 	}
 
-	async function signOut() {
-		await authClient.signOut();
-		window.location.assign("/login");
-	}
-
 	return (
 		<>
 			<Head>
@@ -283,23 +290,7 @@ export default function AdminPage({ initialSponsors }) {
 				<meta name="robots" content="noindex,nofollow" />
 			</Head>
 
-			<div className="min-h-screen bg-[#ede9de] text-[#10261a]">
-				<header className="border-b border-white/10 bg-[#082c1b] text-white">
-					<div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-						<div className="flex items-center gap-3">
-							<div className="rounded-xl bg-white p-2"><Image src="/cartouche.png" alt="Cartouche" width={38} height={38} priority /></div>
-							<div>
-								<p className="text-xs font-bold uppercase tracking-[0.22em] text-[#f4c542]">HC Cartouche</p>
-								<p className="font-semibold">Kioskbeheer</p>
-							</div>
-						</div>
-						<div className="flex items-center gap-3">
-							<div className="hidden text-right sm:block"><p className="text-sm font-semibold">Clubbeheer</p><p className="text-xs text-white/55">Gedeelde toegang</p></div>
-							<button onClick={signOut} className="rounded-xl border border-white/15 p-2.5 text-white/75 transition hover:bg-white/10 hover:text-white" aria-label="Uitloggen"><LogOut className="h-5 w-5" /></button>
-						</div>
-					</div>
-				</header>
-
+			<AdminShell activeItem="sponsors">
 				<main className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
 					<div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
 						<div>
@@ -308,7 +299,6 @@ export default function AdminPage({ initialSponsors }) {
 							<p className="mt-3 max-w-2xl text-[#5c6a61]">Beheer de logo’s, volgorde en zichtbaarheid op de sponsorenschermen.</p>
 						</div>
 						<div className="flex flex-wrap gap-3">
-							<a href="/sponsors" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-[#bcb5a4] bg-white/50 px-4 py-3 font-semibold transition hover:bg-white">Bekijk scherm <ArrowUpRight className="h-4 w-4" /></a>
 							<button onClick={() => setEditing(null)} className="inline-flex items-center gap-2 rounded-xl bg-[#0c4a2c] px-5 py-3 font-semibold text-white shadow-lg shadow-[#0c4a2c]/15 transition hover:bg-[#083b22]"><Plus className="h-5 w-5" /> Sponsor toevoegen</button>
 						</div>
 					</div>
@@ -349,28 +339,13 @@ export default function AdminPage({ initialSponsors }) {
 						)}
 					</section>
 				</main>
-			</div>
+			</AdminShell>
 
 			{editing !== undefined ? <SponsorEditor sponsor={editing} onClose={() => setEditing(undefined)} onSaved={upsertSponsor} /> : null}
 		</>
 	);
 }
 
-export async function getServerSideProps(context) {
-	const [{ getAdminSession }, { listSponsors }] = await Promise.all([
-		import("@/lib/admin-auth"),
-		import("@/lib/sponsors"),
-	]);
-	const session = await getAdminSession(context.req);
-
-	if (!session) {
-		return { redirect: { destination: "/login", permanent: false } };
-	}
-
-	const sponsors = await listSponsors({ includeInactive: true });
-	return {
-		props: {
-			initialSponsors: JSON.parse(JSON.stringify(sponsors)),
-		},
-	};
+export function getServerSideProps() {
+	return { redirect: { destination: "/beheer/sponsoren", permanent: false } };
 }

@@ -8,9 +8,10 @@
     "start": "next start",
     "lint": "eslint .",
     "db:migrate": "bun --env-file=.env.local scripts/migrate.mjs",
-    "admin:create": "bun --env-file=.env.local scripts/create-admin.mjs",
-    "admin:password": "bun --env-file=.env.local scripts/set-admin-password.mjs",
-    "sponsors:import": "bun --env-file=.env.local scripts/import-sponsors.mjs"
+		"admin:create": "bun --env-file=.env.local scripts/create-admin.mjs",
+		"admin:password": "bun --env-file=.env.local scripts/set-admin-password.mjs",
+		"sponsors:import": "bun --env-file=.env.local scripts/import-sponsors.mjs",
+		"training-schedule:import": "bun --env-file=.env.local scripts/import-training-schedule.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

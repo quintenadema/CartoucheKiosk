@@ -3,5 +3,5 @@ export default function LegacyAdminRoute() {
 }
 
 export function getServerSideProps() {
-	return { redirect: { destination: "/", permanent: false } };
+	return { redirect: { destination: "/beheer/sponsoren", permanent: false } };
 }

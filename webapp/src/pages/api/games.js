@@ -4,7 +4,8 @@ import { createHash, randomUUID } from "node:crypto";
 const API_BASE_URL = "https://app.hockeyweerelt.nl";
 const LOOKAHEAD_DAYS = 14;
 const MATCH_DETAIL_CACHE_TTL_MS = 30 * 60 * 1000;
-const MATCH_DETAIL_CONCURRENCY = 6;
+const MATCH_DETAIL_STALE_TTL_MS = 24 * 60 * 60 * 1000;
+const MATCH_DETAIL_CONCURRENCY = 2;
 const FACILITY_MATCH_CACHE_TTL_MS = 2 * 60 * 1000;
 const RESPONSE_CACHE_TTL_MS = 2 * 60 * 1000;
 const RATE_LIMIT_BACKOFF_MS = 60 * 1000;
@@ -15,11 +16,13 @@ const FACILITIES = [
 
 const globalStore = globalThis.__cartoucheHockeyWeereltStore ??= {
 	deviceSession: null,
+	deviceSessionRequest: null,
 	matchDetailCache: new Map(),
 	matchDetailRequests: new Map(),
 	facilityMatchesCache: new Map(),
 	facilityMatchRequests: new Map(),
 	latestGamesResponse: null,
+	latestGamesRequest: null,
 	rateLimitedUntil: 0,
 };
 
@@ -53,6 +56,25 @@ function getRetryAfterMs(response) {
 	}
 
 	return Math.max(retryAfterDate.getTime() - Date.now(), RATE_LIMIT_BACKOFF_MS);
+}
+
+function activateRateLimitBackoff(response, pathname) {
+	const now = Date.now();
+	const retryAfterMs = getRetryAfterMs(response);
+	const wasAlreadyRateLimited = globalStore.rateLimitedUntil > now;
+
+	globalStore.rateLimitedUntil = Math.max(
+		globalStore.rateLimitedUntil,
+		now + retryAfterMs
+	);
+
+	if (!wasAlreadyRateLimited) {
+		console.warn(
+			`HockeyWeerelt rate limit reached at ${pathname}; using cached or summary data for ${Math.ceil(retryAfterMs / 1000)}s`
+		);
+	}
+
+	return retryAfterMs;
 }
 
 function sanitizePathname(pathname) {
@@ -95,10 +117,9 @@ async function registerDevice(uuid) {
 
 	if (!response.ok) {
 		if (response.status === 429) {
-			const retryAfterMs = getRetryAfterMs(response);
-			globalStore.rateLimitedUntil = Math.max(
-				globalStore.rateLimitedUntil,
-				Date.now() + retryAfterMs
+			const retryAfterMs = activateRateLimitBackoff(
+				response,
+				"/device/register"
 			);
 			throw new SignedRequestError("/device/register", response.status, retryAfterMs);
 		}
@@ -123,19 +144,37 @@ async function getDeviceSession(forceRefresh = false) {
 		return globalStore.deviceSession;
 	}
 
-	try {
-		globalStore.deviceSession = await registerDevice(randomUUID());
-		return globalStore.deviceSession;
-	} catch (error) {
-		if (
-			globalStore.deviceSession &&
-			error instanceof SignedRequestError &&
-			error.status === 429
-		) {
-			return globalStore.deviceSession;
-		}
+	if (globalStore.deviceSessionRequest) {
+		return globalStore.deviceSessionRequest;
+	}
 
-		throw error;
+	const previousSession = globalStore.deviceSession;
+	const pendingRequest = (async () => {
+		try {
+			const session = await registerDevice(randomUUID());
+			globalStore.deviceSession = session;
+			return session;
+		} catch (error) {
+			if (
+				previousSession &&
+				error instanceof SignedRequestError &&
+				error.status === 429
+			) {
+				return previousSession;
+			}
+
+			throw error;
+		}
+	})();
+
+	globalStore.deviceSessionRequest = pendingRequest;
+
+	try {
+		return await pendingRequest;
+	} finally {
+		if (globalStore.deviceSessionRequest === pendingRequest) {
+			globalStore.deviceSessionRequest = null;
+		}
 	}
 }
 
@@ -173,19 +212,13 @@ async function signedGet(url) {
 		}
 
 		if (response.status === 429) {
-			const retryAfterMs = getRetryAfterMs(response);
-			globalStore.rateLimitedUntil = Math.max(
-				globalStore.rateLimitedUntil,
-				Date.now() + retryAfterMs
-			);
+			const retryAfterMs = activateRateLimitBackoff(response, url.pathname);
 			throw new SignedRequestError(url.pathname, response.status, retryAfterMs);
 		}
 
 		if (!response.ok) {
 			throw new SignedRequestError(url.pathname, response.status);
 		}
-
-		globalStore.rateLimitedUntil = 0;
 
 		const body = await response.json();
 		return body;
@@ -256,12 +289,18 @@ function getCachedMatchDetail(matchId) {
 		return { hit: false, data: null };
 	}
 
-	if (cachedEntry.expiresAt <= Date.now()) {
+	const staleUntil = cachedEntry.staleUntil ?? cachedEntry.expiresAt;
+
+	if (staleUntil <= Date.now()) {
 		globalStore.matchDetailCache.delete(matchId);
-		return { hit: false, data: null };
+		return { hit: false, stale: false, data: null };
 	}
 
-	return { hit: true, data: cachedEntry.data };
+	return {
+		hit: cachedEntry.expiresAt > Date.now(),
+		stale: cachedEntry.expiresAt <= Date.now(),
+		data: cachedEntry.data,
+	};
 }
 
 async function fetchMatchDetail(matchId) {
@@ -275,6 +314,10 @@ async function fetchMatchDetail(matchId) {
 		return globalStore.matchDetailRequests.get(matchId);
 	}
 
+	if (globalStore.rateLimitedUntil > Date.now()) {
+		return cachedMatchDetail.stale ? cachedMatchDetail.data : null;
+	}
+
 	const pendingRequest = (async () => {
 		const url = new URL(`${API_BASE_URL}/matches/${matchId}`);
 		let matchDetail = null;
@@ -283,6 +326,10 @@ async function fetchMatchDetail(matchId) {
 			const body = await signedGet(url);
 			matchDetail = body?.data ?? body;
 		} catch (error) {
+			if (error instanceof SignedRequestError && error.status === 429) {
+				return cachedMatchDetail.stale ? cachedMatchDetail.data : null;
+			}
+
 			if (!(error instanceof SignedRequestError) || error.status !== 404) {
 				throw error;
 			}
@@ -291,6 +338,7 @@ async function fetchMatchDetail(matchId) {
 		globalStore.matchDetailCache.set(matchId, {
 			data: matchDetail,
 			expiresAt: Date.now() + MATCH_DETAIL_CACHE_TTL_MS,
+			staleUntil: Date.now() + MATCH_DETAIL_STALE_TTL_MS,
 		});
 
 		return matchDetail;
@@ -365,68 +413,99 @@ function normalizeMatch(summaryMatch, detailMatch, facility) {
 	};
 }
 
+async function fetchGamesPayload() {
+	const facilities = await Promise.all(
+		FACILITIES.map(async (configuration) => ({
+			...configuration,
+			facility: await fetchFacilityMatches(configuration.id),
+		}))
+	);
+	const matchJobs = facilities.flatMap(
+		({ responseKey, id, fallbackName, facility }) =>
+			(facility?.matches ?? []).map((summaryMatch) => ({
+				responseKey,
+				id,
+				fallbackName,
+				facility,
+				summaryMatch,
+			}))
+	);
+	const normalizedMatches = await mapWithConcurrency(
+		matchJobs,
+		async ({ responseKey, id, fallbackName, facility, summaryMatch }) => {
+			let detailMatch = null;
+
+			try {
+				detailMatch = await fetchMatchDetail(summaryMatch.id);
+			} catch (error) {
+				console.warn(
+					`Falling back to summary match for ${summaryMatch.id}`,
+					error
+				);
+			}
+
+			return {
+				responseKey,
+				match: normalizeMatch(summaryMatch, detailMatch, {
+					id,
+					name: facility?.name ?? fallbackName,
+				}),
+			};
+		},
+		MATCH_DETAIL_CONCURRENCY
+	);
+	const payload = Object.fromEntries(
+		FACILITIES.map(({ responseKey }) => [responseKey, []])
+	);
+
+	for (const { responseKey, match } of normalizedMatches) {
+		payload[responseKey].push(match);
+	}
+
+	globalStore.latestGamesResponse = {
+		payload,
+		expiresAt: Date.now() + RESPONSE_CACHE_TTL_MS,
+	};
+
+	return payload;
+}
+
+function sendGamesResponse(res, payload) {
+	res.setHeader(
+		"Cache-Control",
+		"public, s-maxage=120, stale-while-revalidate=600"
+	);
+	res.status(200).json(payload);
+}
+
 export default async function handler(req, res) {
 	if (
 		globalStore.latestGamesResponse &&
-		globalStore.latestGamesResponse.expiresAt > Date.now()
+		(globalStore.latestGamesResponse.expiresAt > Date.now() ||
+			globalStore.rateLimitedUntil > Date.now())
 	) {
-		res.status(200).json(globalStore.latestGamesResponse.payload);
+		sendGamesResponse(res, globalStore.latestGamesResponse.payload);
 		return;
 	}
 
-	if (
-		globalStore.rateLimitedUntil > Date.now() &&
-		globalStore.latestGamesResponse
-	) {
-		res.status(200).json(globalStore.latestGamesResponse.payload);
-		return;
-	}
+	const pendingRequest = globalStore.latestGamesRequest ?? fetchGamesPayload();
+	globalStore.latestGamesRequest = pendingRequest;
 
 	try {
-		const facilityResults = await Promise.all(
-			FACILITIES.map(async ({ responseKey, id, fallbackName }) => {
-				const facility = await fetchFacilityMatches(id);
-				const normalizedMatches = await mapWithConcurrency(
-					facility?.matches ?? [],
-					async (summaryMatch) => {
-						let detailMatch = null;
-
-						try {
-							detailMatch = await fetchMatchDetail(summaryMatch.id);
-						} catch (error) {
-							console.warn(
-								`Falling back to summary match for ${summaryMatch.id}`,
-								error
-							);
-						}
-
-						return normalizeMatch(summaryMatch, detailMatch, {
-							id,
-							name: facility?.name ?? fallbackName,
-						});
-					},
-					MATCH_DETAIL_CONCURRENCY
-				);
-
-				return [responseKey, normalizedMatches];
-			})
-		);
-
-		const payload = Object.fromEntries(facilityResults);
-		globalStore.latestGamesResponse = {
-			payload,
-			expiresAt: Date.now() + RESPONSE_CACHE_TTL_MS,
-		};
-
-		res.status(200).json(payload);
+		const payload = await pendingRequest;
+		sendGamesResponse(res, payload);
 	} catch (error) {
 		console.error("Failed to fetch games", error);
 
 		if (globalStore.latestGamesResponse) {
-			res.status(200).json(globalStore.latestGamesResponse.payload);
+			sendGamesResponse(res, globalStore.latestGamesResponse.payload);
 			return;
 		}
 
 		res.status(500).json({ error: "Failed to fetch games" });
+	} finally {
+		if (globalStore.latestGamesRequest === pendingRequest) {
+			globalStore.latestGamesRequest = null;
+		}
 	}
 }

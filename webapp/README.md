@@ -7,10 +7,12 @@ De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cart
 | Route | Doel | Toegang |
 | --- | --- | --- |
 | `/indoor` | Wedstrijden in de Cartouche Hockey Dome | Publiek, kioskweergave |
-| `/outdoor` | Veldindeling en buitenwedstrijden, met horizontale sponsorcarrousel en uitgelichte sponsormomenten | Publiek, kioskweergave |
+| `/outdoor` | Veldindeling met buitenwedstrijden én het handmatige trainingsschema, plus sponsorcarrousel en live-momenten | Publiek, kioskweergave |
 | `/sponsors` | Doorlopende sponsorcarrousel | Publiek, kioskweergave |
 | `/login` | Login met het gezamenlijke clubwachtwoord | Publiek formulier |
-| `/` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
+| `/` | Verwijst door naar `/beheer/sponsoren` | Alleen toegestane beheerders |
+| `/beheer/sponsoren` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
+| `/beheer/trainingsschema` | Het wekelijkse trainingsschema per veld en veldhelft beheren | Alleen toegestane beheerders |
 
 De wedstrijdgegevens worden server-side via `src/pages/api/games.js` opgehaald. Sponsoren worden door `src/pages/api/sponsors.js` uit Neon gelezen. De publieke pagina’s bevatten geen geheime database- of Blob-credentials.
 
@@ -58,7 +60,8 @@ De SQL-bestanden in `migrations/` zijn idempotent en bevatten:
 - `001-better-auth.sql`: accounts, credentials, sessies en verificaties;
 - `002-sponsors.sql`: sponsornaam, logo-URL, Blob-pad, website, volgorde en zichtbaarheid;
 - `003-better-auth-rate-limit.sql`: persistente begrenzing van inlogpogingen;
-- `004-featured-sponsors.sql`: uitgelichte status en de URL en het Blob-pad van de uitgelichte foto.
+- `004-featured-sponsors.sql`: uitgelichte status en de URL en het Blob-pad van de uitgelichte foto;
+- `005-training-sessions.sql`: wekelijkse trainingen, veldhelften, seizoen en zichtbaarheid.
 
 Nieuwe of lege Neon-database voorbereiden:
 
@@ -73,7 +76,15 @@ De bestaande sponsoren eenmalig vanuit de clubsite naar Neon en Vercel Blob migr
 bun run sponsors:import
 ```
 
-De import slaat namen over die al in Neon bestaan en is daardoor veilig opnieuw te starten na een gedeeltelijke netwerkfout. Normaal sponsorbeheer loopt daarna uitsluitend via `/`; de publieke API scrape't de clubsite niet meer.
+De import slaat namen over die al in Neon bestaan en is daardoor veilig opnieuw te starten na een gedeeltelijke netwerkfout. Normaal sponsorbeheer loopt daarna uitsluitend via `/beheer/sponsoren`; de publieke API scrape't de clubsite niet meer.
+
+Het schema uit `Trainingsschema Fred a 26-27` opnieuw idempotent importeren:
+
+```bash
+bun run training-schedule:import
+```
+
+De import bevat 192 trainingsblokken voor seizoen 2026–2027. Handmatige wijzigingen lopen daarna via `/beheer/trainingsschema`; voer de import niet opnieuw uit als handmatig aangepaste bronregels behouden moeten blijven.
 
 Bij een Better Auth-upgrade moet het auth-schema opnieuw met de Better Auth CLI worden gecontroleerd voordat de packageversie wordt uitgerold. Test schemawijzigingen bij voorkeur eerst op een Neon-branch.
 
@@ -100,7 +111,7 @@ Het wachtwoord wordt verborgen ingevoerd, uitsluitend als Better Auth-hash opges
 
 ## Sponsorbeheer
 
-Een beheerder kan in `/`:
+Een beheerder kan in `/beheer/sponsoren`:
 
 - een PNG-, JPG- of WebP-logo van maximaal 4 MB uploaden;
 - sponsornaam en optionele website instellen;
@@ -122,7 +133,8 @@ bun run build
 
 Controleer vóór deployment minimaal:
 
-- login en logout via `/login` en `/`;
+- login en logout via `/login` en `/beheer/sponsoren`;
+- toevoegen, wijzigen, verbergen en verwijderen in `/beheer/trainingsschema`;
 - sponsor toevoegen, aanpassen, verbergen en verwijderen;
 - `Uitgelicht` aanzetten, een foto uploaden en de 10-seconden-takeover op `/outdoor` controleren;
 - weergave op `/sponsors` zonder beheerderssessie;
