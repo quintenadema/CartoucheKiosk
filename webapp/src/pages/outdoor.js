@@ -308,7 +308,9 @@ function GameCard({ label, match, compact = false, secondary = false }) {
 
 	if (isTraining) {
 		const fieldAreaText = match.field_area === "Volledig" ? "Hele veld" : `Helft ${match.field_area}`;
-		const trainingTimeText = isLiveMatch && endTimeText ? `tot ${endTimeText}` : timeText;
+		const trainingTimeText = isLiveMatch
+			? endTimeText ? `tot ${endTimeText}` : timeText
+			: endTimeText ? `${timeText} tot ${endTimeText}` : timeText;
 
 		return (
 			<div className="rounded-lg bg-white px-3 py-1.5 text-[#132317] shadow-md">
