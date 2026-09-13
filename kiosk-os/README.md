@@ -97,6 +97,37 @@ journalctl -u kiosk-tailscale -u tailscaled --no-pager
 
 Als de node na vervanging van hardware opnieuw moet worden geregistreerd, verwijder dan de oude node uit de Tailscale Admin Console, verwijder `tailscale/tailscaled.state` van de bootpartitie en herhaal de registratie met een nieuwe eenmalige key.
 
+## Geheugen en Chromium-crashes
+
+Het image schakelt `kiosk-zram.service` in vóór LightDM. Deze service maakt
+512 MiB gecomprimeerde RAM-swap op `/dev/zram0`, met LZ4 en prioriteit 100.
+Dit geeft Chromium extra ruimte bij geheugendruk zonder swap naar de SD-kaart
+te schrijven; de rootpartitie blijft read-only. Andere swapmanagers worden
+in de imagebuild verwijderd of uitgeschakeld om conflicten te voorkomen.
+
+Aanleiding: op 10 september 2026 beëindigde de OOM-killer een Chromium-proces
+op `cartouche-kiosk-01`. Op 13 september is de kiosk hersteld door de pagina
+te herladen en deze zram-configuratie live te activeren. Een nieuwe screenshot
+bevestigde dat wedstrijden en sponsors weer zichtbaar waren. De service is
+op die Pi voor volgende boots ingeschakeld; een reboot en een nieuw gebouwd
+image zijn voor deze wijziging nog niet getest.
+
+Controle op de Pi:
+
+```bash
+systemctl is-enabled kiosk-zram.service
+systemctl status kiosk-zram.service
+zramctl
+swapon --show
+free -h
+journalctl -k -b --no-pager | grep -Ei 'oom-kill|out of memory'
+```
+
+Bij de live reparatie is zram handmatig geactiveerd, dus de service kan tot
+de volgende boot nog `inactive` zijn terwijl `swapon --show` actieve swap
+toont. Start de service niet nogmaals op een al geconfigureerde `/dev/zram0`.
+Zram vermindert de kans op geheugenuitputting, maar sluit die niet uit.
+
 ## Image bouwen
 
 De scripts bouwen een image door een Raspberry Pi OS-image te downloaden, te vergroten, de skeletonbestanden te kopiëren en packages in een chroot te installeren. Dit vereist een Linux-buildhost met rootrechten, loop devices, `rsync`, `xz`, `zerofree` en voldoende vrije schijfruimte.

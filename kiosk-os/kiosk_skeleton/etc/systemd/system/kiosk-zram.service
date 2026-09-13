@@ -1,0 +1,15 @@
+[Unit]
+Description=Compressed RAM swap for kiosk memory headroom
+After=systemd-modules-load.service
+Before=lightdm.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/modprobe zram
+ExecStart=/usr/sbin/zramctl /dev/zram0 --size 512M --algorithm lz4
+ExecStart=/usr/sbin/mkswap /dev/zram0
+ExecStart=/usr/sbin/swapon --priority 100 /dev/zram0
+
+[Install]
+WantedBy=multi-user.target

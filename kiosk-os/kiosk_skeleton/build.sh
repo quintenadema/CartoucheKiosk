@@ -5,7 +5,7 @@ set -x -e
 apt update
 
 APT_LISTCHANGES_FRONTEND=none DEBIAN_FRONTEND=noninteractive apt dist-upgrade -y --option=Dpkg::Options::=--force-confdef
-DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates wget curl
+DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates wget curl kmod util-linux
 
 # Install Tailscale from its signed, distribution-specific apt repository.
 . /etc/os-release
@@ -32,7 +32,8 @@ apt remove -y userconf-pi || true
 rfkill unblock wlan || true
 # Chromium mods contain weird default configs like accessibility settings and some remote debugging API
 apt remove -y rpi-chromium-mods || true
-# ZRAM will cause high CPU load and slow the system down, we want neither ZRAM nor swap to SD
+# Remove competing swap managers. kiosk-zram provides 512 MiB of compressed
+# RAM swap to reduce Chromium OOM crashes without writing swap to the SD card.
 apt remove -y rpi-swap systemd-zram-generator || true
 # Raspberry Pi OS ships with cloud-init, which seems like a bad idea for security
 apt remove -y cloud-guest-utils cloud-init || true
@@ -134,6 +135,7 @@ systemctl enable kiosk-watchdog
 systemctl enable kiosk-set-hostname
 systemctl enable kiosk-locale
 systemctl enable kiosk-tailscale
+systemctl enable kiosk-zram
 systemctl enable ntpdate
 systemctl enable lightdm
 systemctl enable nginx
