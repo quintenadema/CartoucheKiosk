@@ -97,6 +97,52 @@ journalctl -u kiosk-tailscale -u tailscaled --no-pager
 
 Als de node na vervanging van hardware opnieuw moet worden geregistreerd, verwijder dan de oude node uit de Tailscale Admin Console, verwijder `tailscale/tailscaled.state` van de bootpartitie en herhaal de registratie met een nieuwe eenmalige key.
 
+## Splashscreen blijft zichtbaar terwijl Chromium draait
+
+De blauwe achtergrond met otter is `/boot/firmware/splash.png`. De oude
+`kiosk-splash` startte tweemaal achter elkaar een blokkerende `fbi`-viewer.
+Wanneer de eerste viewer veel later stopte, kon de tweede tty1 activeren
+terwijl Chromium nog op tty7 draaide. Op 13 september 2026 is dit op de
+live Pi vastgesteld: tty1 was actief met een achtergebleven `fbi`, en na
+stoppen van de viewer en `chvt 7` kwam de kiosk terug.
+
+Het script start nu maximaal één viewer, wacht begrensd op de framebuffer
+en ruimt de viewer op. De LightDM-override voert `kiosk-stop-splash` uit
+voordat X start. Die stopt achtergebleven splashprocessen en voorkomt met
+een marker in `/run` dat de splash later in dezelfde boot opnieuw start.
+De marker verdwijnt vanzelf bij een reboot.
+
+Controleer bij een melding zowel `cat /sys/class/tty/tty0/active` als de
+browser: een X11-screenshot alleen bewijst niet dat de TV die console toont.
+De live reparatie en blokkering van een late splashstart zijn gecontroleerd;
+de gewijzigde bootvolgorde is nog niet met een koude start getest.
+
+## TV automatisch bedienen via HDMI-CEC
+
+`kiosk-tv.timer` voert bij het opstarten (na 90 seconden) en daarna iedere
+10 minuten `kiosk-tv` uit. Met `[cec] enabled=1` vraagt de Pi van 09:00 tot
+23:50 de TV aan te zetten en de aangesloten HDMI-ingang te kiezen. Van
+00:00 tot 08:50 vraagt hij iedere 10 minuten standby. De uurgrens gebruikt
+`[general] timezone` (Cartouche: `Europe/Amsterdam`, inclusief zomertijd).
+De timer is uitgelijnd op de tienminutengrenzen; na een herstart past de Pi
+de toestand voor het huidige tijdstip toe.
+
+`[cec] device` selecteert de CEC-adapter (standaard `/dev/cec0`, de eerste
+HDMI-poort). Het script leest het fysieke HDMI-adres uit de adapter, zodat
+het geen TV-ingangsnummer hardcodeert. `v4l-utils` levert `cec-ctl`.
+Zet `[cec] enabled=0` om automatische bediening uit te schakelen.
+
+De TV moet HDMI-CEC en inschakelen vanuit standby ondersteunen en toestaan.
+Een TV zonder netspanning kan niet via HDMI worden ingeschakeld. Sommige
+TV's schakelen CEC uit in diepe standby of leveren dan geen HDMI-adres;
+bij zo'n TV is automatisch wakker worden niet gegarandeerd. Succesvolle
+CEC-verzending bewijst niet dat de TV het beeld daadwerkelijk toont.
+
+```bash
+systemctl list-timers kiosk-tv.timer
+journalctl -u kiosk-tv.service --no-pager
+```
+
 ## Geheugen en Chromium-crashes
 
 Het image schakelt `kiosk-zram.service` in vóór LightDM. Deze service maakt

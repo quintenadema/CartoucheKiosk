@@ -1,0 +1,7 @@
+#!/bin/sh
+# The marker also prevents a late splash invocation during this boot.
+touch /run/kiosk-splash-stopped
+pkill -x kiosk-splash || true
+# Clean up a viewer orphaned by an earlier version of kiosk-splash.
+pkill -f '^/usr/bin/fbi .* /boot/firmware/splash.png$' || true
+exit 0

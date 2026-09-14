@@ -1,0 +1,11 @@
+[Unit]
+Description=Apply kiosk TV schedule every ten minutes
+
+[Timer]
+OnBootSec=90s
+OnCalendar=*-*-* *:00/10:00 Europe/Amsterdam
+AccuracySec=1s
+Unit=kiosk-tv.service
+
+[Install]
+WantedBy=timers.target

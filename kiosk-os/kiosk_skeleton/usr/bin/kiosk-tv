@@ -1,0 +1,34 @@
+#!/bin/bash
+set -euo pipefail
+
+CONFIG_FILE=/boot/firmware/kioskbrowser.ini
+enabled=$(get-ini "$CONFIG_FILE" cec enabled 0 || true)
+[[ "$enabled" == 1 ]] || exit 0
+device=$(get-ini "$CONFIG_FILE" cec device /dev/cec0 || true)
+timezone=$(get-ini "$CONFIG_FILE" general timezone Europe/Amsterdam || true)
+hour=$(TZ="$timezone" date +%H)
+
+# Claim an address only when needed; do not reset the CEC identity every run.
+logical=$(cec-ctl -d "$device" -s --logical-address)
+if [[ ! "$logical" =~ ^[0-9]+$ ]] || (( logical > 14 )); then
+    cec-ctl -d "$device" --playback --osd-name Cartouche
+fi
+
+if (( 10#$hour < 9 )); then
+    echo "TV standby ($timezone, hour $hour)"
+    cec-ctl -d "$device" -s --to 0 --standby
+else
+    echo "TV wake and HDMI selection ($timezone, hour $hour)"
+    cec-ctl -d "$device" -s --to 0 --image-view-on
+    # Allow the TV to expose its HDMI address after waking from standby.
+    for attempt in 1 2 3 4 5; do
+        physical=$(cec-ctl -d "$device" -s --physical-address)
+        if [[ "$physical" =~ ^[0-9a-fA-F](\.[0-9a-fA-F]){3}$ && "$physical" != f.f.f.f ]]; then
+            cec-ctl -d "$device" -s --active-source "phys-addr=$physical"
+            exit 0
+        fi
+        sleep 2
+    done
+    echo "TV HDMI physical address unavailable after wake request" >&2
+    exit 1
+fi

@@ -1,28 +1,35 @@
 #!/bin/sh
-
-display_splash() {
-    # Disable the VT consoles
-    if [ -f /sys/class/vtconsole/vtcon0/bind ]; then
-        echo 0 > /sys/class/vtconsole/vtcon0/bind
+# Boot-only splash. Never launch a second viewer after the first one exits.
+viewer_pid=
+cleanup() {
+    if [ -n "$viewer_pid" ]; then
+        kill "$viewer_pid" 2>/dev/null || true
+        wait "$viewer_pid" 2>/dev/null || true
     fi
-    if [ -f /sys/class/vtconsole/vtcon1/bind ]; then
-        echo 0 > /sys/class/vtconsole/vtcon1/bind
-    fi
-
-    echo | /usr/bin/fbi -d /dev/fb0 --noverbose --nointeractive -T 1 -1 -t 0 -a /boot/firmware/splash.png 2> /dev/null > /dev/null
 }
+trap cleanup EXIT
+trap 'exit 0' HUP INT TERM
 
-# If there's already a /dev/fb0 (like simple-framebuffer or a UEFI framebuffer on x86), use it
-if [ -e /dev/fb0 ]; then
-    display_splash
-fi
+[ ! -e /run/kiosk-splash-stopped ] || exit 0
+# Load DRM before drawing: loading it afterwards can wipe the framebuffer.
+timeout 10 /sbin/modprobe -abq vc4 drm_display_helper cec v4l2_mem2mem drm_dma_helper videobuf2_dma_contig videobuf2_memops videobuf2_v4l2 v3d videodev gpu_sched i2c_brcmstb drm_shmem_helper videobuf2_common drm_kms_helper mc drm drm_panel_orientation_quirks backlight || true
 
-# Try to load Raspberry Pi GPU/DRM drivers now, otherwise the driver load will wipe the splash later.
-/sbin/modprobe -abq vc4 drm_display_helper cec v4l2_mem2mem drm_dma_helper videobuf2_dma_contig videobuf2_memops videobuf2_v4l2 v3d videodev gpu_sched i2c_brcmstb drm_shmem_helper videobuf2_common drm_kms_helper mc drm  drm_panel_orientation_quirks backlight
-
-until [ -e /dev/fb0 ]
-do
-     sleep 0.2
+attempt=0
+while [ ! -e /dev/fb0 ]; do
+    [ ! -e /run/kiosk-splash-stopped ] || exit 0
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 100 ] || exit 0
+    sleep 0.2
 done
+[ ! -e /run/kiosk-splash-stopped ] || exit 0
 
-display_splash
+/usr/bin/fbi -d /dev/fb0 --noverbose --nointeractive -T 1 -1 -t 0 -a /boot/firmware/splash.png </dev/null >/dev/null 2>&1 &
+viewer_pid=$!
+# LightDM stops us before starting X. Also bound lifetime if LightDM fails.
+attempt=0
+while kill -0 "$viewer_pid" 2>/dev/null; do
+    [ ! -e /run/kiosk-splash-stopped ] || exit 0
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 150 ] || exit 0
+    sleep 0.2
+done

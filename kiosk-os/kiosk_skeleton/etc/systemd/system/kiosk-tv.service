@@ -1,0 +1,9 @@
+[Unit]
+Description=Apply kiosk TV power and HDMI schedule
+After=kiosk-locale.service ntpdate.service
+ConditionPathExists=/dev/cec0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/kiosk-tv
+TimeoutStartSec=45
