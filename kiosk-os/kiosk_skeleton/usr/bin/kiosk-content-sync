@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+"""Publish public club news/agenda to the kiosk's authenticated cache endpoint."""
+import json
+import os
+import urllib.request
+
+BASE = 'https://www.hc-cartouche.nl'
+NEWS = BASE + '/rts/collections/public/bc321c9b/runtime/collection/Nieuws/query-data?pageSize=12&pageNumber=0&query=%28%29&language=DUTCH'
+
+def fetch(url):
+    request = urllib.request.Request(url, headers={'User-Agent': 'CartoucheKiosk/1.0'})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        body = response.read(1500001)
+        if len(body) > 1500000:
+            raise ValueError('Club source too large')
+        return body.decode('utf-8')
+
+payload = json.dumps({'news': json.loads(fetch(NEWS)), 'agendaHtml': fetch(BASE + '/')}).encode()
+request = urllib.request.Request('https://cartouche-kiosk.vercel.app/api/club-content',
+    data=payload, method='POST', headers={'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + os.environ['CLUB_CONTENT_SYNC_TOKEN']})
+with urllib.request.urlopen(request, timeout=30) as response:
+    print(response.read(4096).decode())

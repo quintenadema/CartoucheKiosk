@@ -1,0 +1,109 @@
+#!/usr/bin/python3
+"""Bounded, persistent text diagnostics for the kiosk's read-only OS."""
+import datetime
+import json
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+from pathlib import Path
+import selectors
+import signal
+import subprocess
+import time
+
+DIRECTORY = Path('/boot/firmware/kiosk-diagnostics')
+
+
+def read(path):
+    try:
+        return Path(path).read_text().strip()
+    except OSError as error:
+        return str(error)
+
+
+def health():
+    result = {
+        'uptime': read('/proc/uptime'),
+        'load': read('/proc/loadavg'),
+        'memory': [line for line in read('/proc/meminfo').splitlines()
+                   if line.startswith(('MemAvailable:', 'SwapFree:', 'SwapTotal:'))],
+        'temperature_millidegrees': read('/sys/class/thermal/thermal_zone0/temp'),
+        'watchdog_bootstatus': read('/sys/class/watchdog/watchdog0/bootstatus'),
+        'active_console': read('/sys/class/tty/tty0/active'),
+    }
+    try:
+        result['throttled'] = subprocess.check_output(
+            ['/usr/bin/vcgencmd', 'get_throttled'], timeout=3, text=True,
+            stderr=subprocess.STDOUT).strip()
+    except (OSError, subprocess.SubprocessError) as error:
+        result['throttled'] = str(error)
+    return result
+
+
+def main():
+    DIRECTORY.mkdir(exist_ok=True)
+    handler = RotatingFileHandler(DIRECTORY / 'events.log', maxBytes=4 * 1024 * 1024,
+                                  backupCount=7, encoding='utf-8')
+    # Disk errors must fail the service so systemd can report/retry them.
+    def fail(record):
+        raise RuntimeError('Unable to write persistent diagnostics')
+    handler.handleError = fail
+    log = logging.getLogger('kiosk-diagnostics')
+    log.setLevel(logging.INFO)
+    log.addHandler(handler)
+    boot = read('/proc/sys/kernel/random/boot_id')
+    def record(kind, data):
+        log.info(json.dumps({'time_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                             'boot_id': boot, 'kind': kind, 'data': data}))
+    def sync():
+        handler.flush()
+        os.fsync(handler.stream.fileno())
+    stopping = False
+    def stop(signum, frame):
+        nonlocal stopping
+        stopping = True
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    record('recorder_start', health())
+    sync()
+    journal = subprocess.Popen(
+        ['journalctl', '--boot=0', '--follow', '--no-tail', '--no-pager', '--output=json',
+         '--output-fields=MESSAGE,_BOOT_ID,__MONOTONIC_TIMESTAMP,__REALTIME_TIMESTAMP,'
+         '_SYSTEMD_UNIT,SYSLOG_IDENTIFIER,PRIORITY,_TRANSPORT'], stdout=subprocess.PIPE)
+    selector = selectors.DefaultSelector()
+    selector.register(journal.stdout, selectors.EVENT_READ)
+    pending = b''
+    next_health = time.monotonic() + 60
+    try:
+        while not stopping:
+            for key, _ in selector.select(timeout=1):
+                chunk = os.read(key.fd, 65536)
+                if not chunk:
+                    raise RuntimeError('journalctl stream ended unexpectedly')
+                pending += chunk
+                while b'\n' in pending:
+                    line, pending = pending.split(b'\n', 1)
+                    # Bound unusually large messages in the retained text log.
+                    log.info(line[:65536].decode('utf-8', errors='replace'))
+                if len(pending) > 65536:
+                    log.info(pending[:65536].decode('utf-8', errors='replace'))
+                    pending = b''
+            if time.monotonic() >= next_health:
+                record('health', health())
+                sync()
+                next_health = time.monotonic() + 60
+    finally:
+        record('recorder_stop', 'Recorder stopping; this alone does not prove a clean shutdown')
+        sync()
+        journal.terminate()
+        try:
+            journal.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            journal.kill()
+            journal.wait()
+        selector.close()
+        handler.close()
+
+
+if __name__ == '__main__':
+    main()

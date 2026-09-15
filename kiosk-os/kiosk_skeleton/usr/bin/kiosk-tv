@@ -6,7 +6,15 @@ enabled=$(get-ini "$CONFIG_FILE" cec enabled 0 || true)
 [[ "$enabled" == 1 ]] || exit 0
 device=$(get-ini "$CONFIG_FILE" cec device /dev/cec0 || true)
 timezone=$(get-ini "$CONFIG_FILE" general timezone Europe/Amsterdam || true)
-hour=$(TZ="$timezone" date +%H)
+read -r weekday hour minute <<< "$(TZ="$timezone" date '+%u %H %M')"
+minutes=$((10#$hour * 60 + 10#$minute))
+if (( weekday <= 5 )); then
+    opening=$((16 * 60))
+    closing=$((23 * 60 + 30))
+else
+    opening=$((8 * 60))
+    closing=$((22 * 60 + 30))
+fi
 
 # Claim an address only when needed; do not reset the CEC identity every run.
 logical=$(cec-ctl -d "$device" -s --logical-address)
@@ -14,11 +22,11 @@ if [[ ! "$logical" =~ ^[0-9]+$ ]] || (( logical > 14 )); then
     cec-ctl -d "$device" --playback --osd-name Cartouche
 fi
 
-if (( 10#$hour < 9 )); then
-    echo "TV standby ($timezone, hour $hour)"
+if (( minutes < opening || minutes >= closing )); then
+    echo "TV standby ($timezone, weekday $weekday, $hour:$minute)"
     cec-ctl -d "$device" -s --to 0 --standby
 else
-    echo "TV wake and HDMI selection ($timezone, hour $hour)"
+    echo "TV wake and HDMI selection ($timezone, weekday $weekday, $hour:$minute)"
     cec-ctl -d "$device" -s --to 0 --image-view-on
     # Allow the TV to expose its HDMI address after waking from standby.
     for attempt in 1 2 3 4 5; do

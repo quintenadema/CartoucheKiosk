@@ -1,0 +1,12 @@
+[Unit]
+Description=Synchronize public club news and agenda to kiosk server
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/kiosk-content-sync.env
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/kiosk-content-sync.env
+ExecStart=/usr/bin/kiosk-content-sync
+TimeoutStartSec=90
+Nice=10

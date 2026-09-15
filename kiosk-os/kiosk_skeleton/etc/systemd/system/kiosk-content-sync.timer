@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh club news and agenda every fifteen minutes
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=15min
+Unit=kiosk-content-sync.service
+
+[Install]
+WantedBy=timers.target

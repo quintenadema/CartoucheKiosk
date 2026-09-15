@@ -120,9 +120,10 @@ de gewijzigde bootvolgorde is nog niet met een koude start getest.
 ## TV automatisch bedienen via HDMI-CEC
 
 `kiosk-tv.timer` voert bij het opstarten (na 90 seconden) en daarna iedere
-10 minuten `kiosk-tv` uit. Met `[cec] enabled=1` vraagt de Pi van 09:00 tot
-23:50 de TV aan te zetten en de aangesloten HDMI-ingang te kiezen. Van
-00:00 tot 08:50 vraagt hij iedere 10 minuten standby. De uurgrens gebruikt
+10 minuten `kiosk-tv` uit. Met `[cec] enabled=1` staat de TV op werkdagen
+aan van 16:00 tot 23:30, en op zaterdag/zondag van 08:00 tot 22:30. Binnen
+dat venster vraagt de Pi inschakelen en HDMI-selectie; vanaf de sluitingstijd
+en vóór de openingstijd vraagt hij standby. De tijdsgrens gebruikt
 `[general] timezone` (Cartouche: `Europe/Amsterdam`, inclusief zomertijd).
 De timer is uitgelijnd op de tienminutengrenzen; na een herstart past de Pi
 de toestand voor het huidige tijdstip toe.
@@ -416,3 +417,56 @@ This allows for a number of different mechanisms to be self-hosted, even without
 ## Inspiration / Other Kiosk-OSes:
 - https://github.com/jareware/chilipie-kiosk/
 - https://github.com/guysoft/FullPageOS
+
+## Blijvende rebootdiagnostiek
+
+`kiosk-diagnostics.service` bewaart het journal van de huidige boot en volgt
+nieuwe berichten in `/boot/firmware/kiosk-diagnostics/events.log`. Zeven
+rotatiebestanden van maximaal circa 4 MiB houden het totaal rond 32 MiB.
+De rootpartitie blijft read-only; deze tekstlogs staan op de schrijfbare
+bootpartitie. Dit veroorzaakt beperkte SD-schrijfactiviteit.
+
+Iedere minuut wordt een healthrecord met boot-ID, UTC-tijd, uptime, geheugen,
+temperatuur, voedings-/throttlingflags, watchdog-bootstatus en actieve console
+geschreven en geflusht naar opslag. Journalregels bevatten ook monotone tijd,
+zodat een klokcorrectie bij het opstarten herkenbaar blijft. Een recorderstop
+is geen bewijs van een afgeronde shutdown. Bij stroomuitval of een harde hang
+kan de laatste minuut ontbreken. De hardware meldt niet altijd de resetreden.
+Bij een herstart van de recorder wordt het huidige bootjournal opnieuw gelezen;
+berichten kunnen dus dubbel voorkomen.
+
+```bash
+systemctl status kiosk-diagnostics
+tail -n 20 /boot/firmware/kiosk-diagnostics/events.log
+grep -Ei 'out of memory|oom-kill|watchdog|shutdown|reboot|recorder_start|health' /boot/firmware/kiosk-diagnostics/events.log*
+```
+
+Op 14 september werd na de reboot opnieuw een Chromium-renderer door de
+OOM-killer beëindigd. Daarom gebruikt de Cartouche-configuratie nu
+`hardware_accel=0` en `low_end_device_mode=1`. Dit vermindert GPU-gebruik,
+maar kan animaties minder vloeiend maken. Langdurige stabiliteit moet nog
+worden vastgesteld; de logs maken verdere diagnose mogelijk.
+
+## Nieuws en agenda synchroniseren
+
+De clubwebsite geeft vanuit Vercel HTTP 403, maar is vanaf de kiosk bereikbaar.
+`kiosk-content-sync.timer` haalt iedere 15 minuten de openbare bronnen op en
+stuurt ze via een geauthenticeerde POST naar `/api/club-content`. Vercel bewaart
+het resultaat in `kiosk_club_content` (migratie `006-club-content.sql`). GET
+leest deze blijvende cache; een mislukte sync wist de vorige inhoud niet.
+
+Voor een nieuwe Pi: plaats dezelfde `CLUB_CONTENT_SYNC_TOKEN` als in Vercel
+in `/etc/kiosk-content-sync.env` (root, 0600), als `CLUB_CONTENT_SYNC_TOKEN=<waarde>`.
+Zet de sleutel nooit in Git of op de publieke bootpartitie. Zonder dit bestand
+slaat de service synchronisatie over. Het image schakelt de timer in; de
+huidige Pi is al geconfigureerd.
+
+```bash
+systemctl list-timers kiosk-content-sync.timer
+journalctl -u kiosk-content-sync.service --no-pager
+```
+
+`fetchedAt` in het API-antwoord vermeldt de laatste succesvolle synchronisatie.
+Bij langdurige uitval blijft inhoud beschikbaar, maar kan die verouderen.
+Lege of onvolledige bronresultaten worden momenteel geweigerd om te voorkomen
+dat bronfouten de laatst bekende inhoud wissen.

@@ -15,7 +15,7 @@ STUB
 cat > "$test_dir/date" <<'STUB'
 #!/bin/bash
 [[ "$TZ" == Europe/Amsterdam ]] || exit 1
-echo "$TV_TEST_HOUR"
+echo "$TV_TEST_TIME"
 STUB
 cat > "$test_dir/cec-ctl" <<'STUB'
 #!/bin/bash
@@ -31,19 +31,28 @@ exit 0
 STUB
 chmod +x "$test_dir/"{get-ini,date,cec-ctl,sleep}
 export PATH="$test_dir:$PATH"
-for hour in 00 08 09 23; do
-    export TV_TEST_HOUR=$hour
-    : > "$TV_TEST_LOG"
-    bash "$script" >/dev/null
-    if (( 10#$hour < 9 )); then
-        grep -q -- --standby "$TV_TEST_LOG"
-        ! grep -Eq -- 'image-view-on|active-source' "$TV_TEST_LOG"
+for day in 1 2 3 4 5 6 7; do
+    if (( day <= 5 )); then
+        cases="00:00:off 15:59:off 16:00:on 23:29:on 23:30:off 23:59:off"
     else
-        grep -q -- --image-view-on "$TV_TEST_LOG"
-        grep -q -- 'phys-addr=2.0.0.0' "$TV_TEST_LOG"
-        ! grep -q -- --standby "$TV_TEST_LOG"
+        cases="00:00:off 07:59:off 08:00:on 22:29:on 22:30:off 23:59:off"
     fi
+    for item in $cases; do
+        IFS=: read -r hour minute expected <<< "$item"
+        export TV_TEST_TIME="$day $hour $minute"
+        : > "$TV_TEST_LOG"
+        bash "$script" >/dev/null
+        if [[ "$expected" == off ]]; then
+            grep -q -- --standby "$TV_TEST_LOG"
+            ! grep -Eq -- 'image-view-on|active-source' "$TV_TEST_LOG"
+        else
+            grep -q -- --image-view-on "$TV_TEST_LOG"
+            grep -q -- 'phys-addr=2.0.0.0' "$TV_TEST_LOG"
+            ! grep -q -- --standby "$TV_TEST_LOG"
+        fi
+    done
 done
+export TV_TEST_TIME="6 08 00"
 : > "$TV_TEST_LOG"
 TV_TEST_ENABLED=0 bash "$script"
 [[ ! -s "$TV_TEST_LOG" ]]

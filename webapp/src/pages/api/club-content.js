@@ -1,10 +1,15 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+import { getSql } from "../../lib/db";
+
+export const config = { api: { bodyParser: { sizeLimit: "2mb" } } };
+
 const CLUB_BASE_URL = "https://www.hc-cartouche.nl";
 const CLUB_HOME_URL = `${CLUB_BASE_URL}/`;
 const CLUB_NEWS_URL = `${CLUB_BASE_URL}/rts/collections/public/bc321c9b/runtime/collection/Nieuws/query-data?pageSize=12&pageNumber=0&query=%28%29&language=DUTCH`;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const SOURCE_TIMEOUT_MS = 12_000;
-const RESPONSE_CACHE_CONTROL = "public, s-maxage=900, stale-while-revalidate=3600";
-const STORE_VERSION = 3;
+const RESPONSE_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
+const STORE_VERSION = 5;
 
 const clubContentStore = globalThis.__cartoucheClubContentStore?.version === STORE_VERSION
 	? globalThis.__cartoucheClubContentStore
@@ -54,7 +59,7 @@ async function fetchText(url) {
 	});
 
 	if (!response.ok) {
-		throw new Error(`Cartouche content request failed with ${response.status}`);
+		throw new Error(`Cartouche content request failed with ${response.status} (${new URL(url).pathname})`);
 	}
 
 	return response.text();
@@ -136,6 +141,10 @@ async function loadClubContent() {
 		fetchText(CLUB_HOME_URL),
 	]);
 
+	for (const [source, result] of [["news", newsResult], ["agenda", agendaResult]]) {
+		if (result.status === "rejected") console.error("club-content upstream failed", { source, message: result.reason?.message, cause: result.reason?.cause?.message, code: result.reason?.cause?.code });
+	}
+
 	if (newsResult.status === "rejected" && agendaResult.status === "rejected") {
 		throw newsResult.reason;
 	}
@@ -165,6 +174,9 @@ async function loadClubContent() {
 }
 
 async function getClubContent() {
+	const rows = await getSql()`SELECT payload FROM kiosk_club_content WHERE id = 'club'`;
+	if (rows[0]?.payload) return rows[0].payload;
+
 	if (clubContentStore.data && clubContentStore.expiresAt > Date.now()) {
 		return clubContentStore.data;
 	}
@@ -185,8 +197,30 @@ async function getClubContent() {
 }
 
 export default async function handler(request, response) {
+	if (request.method === "POST") {
+		response.setHeader("Cache-Control", "no-store");
+		const secret = process.env.CLUB_CONTENT_SYNC_TOKEN;
+		const supplied = String(request.headers.authorization ?? "");
+		const hash = (value) => createHash("sha256").update(value).digest();
+		if (!secret || !timingSafeEqual(hash(supplied), hash(`Bearer ${secret}`))) {
+			return response.status(401).json({ error: "Unauthorized" });
+		}
+		try {
+			const news = normalizeNews(request.body?.news);
+			const agenda = normalizeAgenda(String(request.body?.agendaHtml ?? ""));
+			if (!news.length || !agenda.length) return response.status(422).json({ error: "Incomplete source data; previous content retained" });
+			const data = { news, agenda, fetchedAt: new Date().toISOString() };
+			await getSql()`INSERT INTO kiosk_club_content (id, payload) VALUES ('club', ${JSON.stringify(data)}::jsonb)
+				ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()`;
+			clubContentStore.data = data;
+			return response.status(200).json({ news: news.length, agenda: agenda.length, fetchedAt: data.fetchedAt });
+		} catch (error) {
+			console.error("club-content sync failed", { message: error.message });
+			return response.status(500).json({ error: "Content sync failed" });
+		}
+	}
 	if (request.method !== "GET") {
-		response.setHeader("Allow", "GET");
+		response.setHeader("Allow", "GET, POST");
 		return response.status(405).json({ error: "Method not allowed" });
 	}
 
@@ -194,9 +228,10 @@ export default async function handler(request, response) {
 
 	try {
 		return response.status(200).json(await getClubContent());
-	} catch {
-		return response.status(200).json(
-			clubContentStore.data ?? { news: [], agenda: [], fetchedAt: null }
-		);
+	} catch (error) {
+		console.error("club-content failed", { message: error.message, cause: error.cause?.message, code: error.cause?.code });
+		response.setHeader("Cache-Control", "no-store");
+		if (clubContentStore.data) return response.status(200).json(clubContentStore.data);
+		return response.status(502).json({ error: "Club content temporarily unavailable" });
 	}
 }

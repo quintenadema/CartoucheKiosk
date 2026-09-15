@@ -5,7 +5,7 @@ set -x -e
 apt update
 
 APT_LISTCHANGES_FRONTEND=none DEBIAN_FRONTEND=noninteractive apt dist-upgrade -y --option=Dpkg::Options::=--force-confdef
-DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates wget curl kmod util-linux v4l-utils
+DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates wget curl kmod util-linux v4l-utils python3
 
 # Install Tailscale from its signed, distribution-specific apt repository.
 . /etc/os-release
@@ -136,6 +136,8 @@ systemctl enable kiosk-set-hostname
 systemctl enable kiosk-locale
 systemctl enable kiosk-tailscale
 systemctl enable kiosk-zram
+systemctl enable kiosk-diagnostics
+systemctl enable kiosk-content-sync.timer
 systemctl enable kiosk-tv.timer
 systemctl enable ntpdate
 systemctl enable lightdm

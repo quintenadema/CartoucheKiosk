@@ -1,0 +1,17 @@
+[Unit]
+Description=Persistent kiosk reboot and health diagnostics
+After=local-fs.target systemd-journald.service
+RequiresMountsFor=/boot/firmware
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/kiosk-diagnostics
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=10
+Nice=10
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
