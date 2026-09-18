@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CalendarRange, LayoutGrid, LogOut } from "lucide-react";
+import { CalendarRange, Images, LayoutGrid, LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
 const navigationItems = [
@@ -9,6 +9,12 @@ const navigationItems = [
 		label: "Sponsoren",
 		href: "/beheer/sponsoren",
 		icon: LayoutGrid,
+	},
+	{
+		id: "spotlights",
+		label: "Uitlichtingen",
+		href: "/beheer/uitlichtingen",
+		icon: Images,
 	},
 	{
 		id: "training-schedule",

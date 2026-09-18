@@ -12,6 +12,7 @@ De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cart
 | `/login` | Login met het gezamenlijke clubwachtwoord | Publiek formulier |
 | `/` | Verwijst door naar `/beheer/sponsoren` | Alleen toegestane beheerders |
 | `/beheer/sponsoren` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
+| `/beheer/uitlichtingen` | Schermvullende clubfoto's toevoegen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
 | `/beheer/trainingsschema` | Het wekelijkse trainingsschema per veld en veldhelft beheren | Alleen toegestane beheerders |
 
 De wedstrijdgegevens worden server-side via `src/pages/api/games.js` opgehaald. Sponsoren worden door `src/pages/api/sponsors.js` uit Neon gelezen. De publieke pagina’s bevatten geen geheime database- of Blob-credentials.
@@ -62,6 +63,7 @@ De SQL-bestanden in `migrations/` zijn idempotent en bevatten:
 - `003-better-auth-rate-limit.sql`: persistente begrenzing van inlogpogingen;
 - `004-featured-sponsors.sql`: uitgelichte status en de URL en het Blob-pad van de uitgelichte foto;
 - `005-training-sessions.sql`: wekelijkse trainingen, veldhelften, seizoen en zichtbaarheid.
+- `007-spotlights.sql`: onafhankelijke schermvullende clubuitlichtingen, volgorde en zichtbaarheid.
 
 Nieuwe of lege Neon-database voorbereiden:
 
@@ -123,6 +125,10 @@ Een beheerder kan in `/beheer/sponsoren`:
 Uploads gaan rechtstreeks van de browser naar Vercel Blob met een kortlevend uploadtoken. Dat token wordt alleen afgegeven na een geldige beheerderssessie. Bij vervangen of verwijderen ruimt de API het oude Blob-object op.
 
 Op `/outdoor` pauzeert de horizontale carrousel wanneer een uitgelichte sponsor het midden van het scherm bereikt. De uitgelichte foto zoomt dan naar een bijna schermvullende takeover, blijft 10 seconden zichtbaar en zoomt daarna terug. De carrousel hervat vervolgens automatisch. Alleen actieve sponsors met zowel `featured = true` als een geldige uitgelichte foto kunnen deze takeover starten.
+
+## Uitlichtingen
+
+Via `/beheer/uitlichtingen` kan een beheerder losse clubfoto's uploaden zonder daar een sponsor aan te koppelen. Actieve uitlichtingen verschijnen op `/outdoor` op volgorde, ongeveer eens per vijf minuten. Elke foto gebruikt dezelfde bijna schermvullende animatie als een uitgelichte sponsor, blijft 10 seconden staan en maakt altijd plaats voor live wedstrijdmomenten.
 
 ## Testen en bouwen
 

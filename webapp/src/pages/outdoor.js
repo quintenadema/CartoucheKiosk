@@ -23,6 +23,7 @@ const CLOCK_INTERVAL_MS = 30000;
 const LIVE_WINDOW_MS = 110 * 60 * 1000;
 const FEATURED_SPONSOR_DURATION_MS = 10_000;
 const FEATURED_SPONSOR_EXIT_MS = 900;
+const SPOTLIGHT_INTERVAL_MS = 5 * 60 * 1000;
 const SPONSOR_CAROUSEL_SPEED_MULTIPLIER = 2;
 const DEMO_FORCE_LIVE = false;
 const LIVE_SEEN_STORAGE_PREFIX = "cartouche-outdoor-live-seen:";
@@ -670,7 +671,7 @@ function FeaturedSponsorTakeover({ sponsor, exiting, onExitComplete }) {
 			>
 				<img
 					src={sponsor.featuredImageUrl}
-					alt={`Uitgelichte foto van ${sponsor.name}`}
+					alt={sponsor.takeoverAlt || `Uitgelichte foto van ${sponsor.name}`}
 					className="absolute inset-0 h-full w-full object-contain"
 				/>
 			</article>
@@ -792,6 +793,7 @@ export default function OutdoorGames() {
 	const [games, setGames] = useState([]);
 	const [trainingSessions, setTrainingSessions] = useState([]);
 	const [sponsors, setSponsors] = useState([]);
+	const [spotlights, setSpotlights] = useState([]);
 	const [currentTime, setCurrentTime] = useState(null);
 	const [featuredTakeover, setFeaturedTakeover] = useState(null);
 	const [liveMatch, setLiveMatch] = useState(null);
@@ -814,6 +816,7 @@ export default function OutdoorGames() {
 	const demoMatchRef = useRef(null);
 	const finalSnapshotPendingRef = useRef(false);
 	const demoEventCounterRef = useRef(0);
+	const spotlightIndexRef = useRef(0);
 
 	const mergeLiveMatchIntoGames = useCallback((match) => {
 		setGames((currentGames) => {
@@ -968,7 +971,38 @@ export default function OutdoorGames() {
 				preload.src = sponsor.featuredImageUrl;
 			}
 		}
-	}, [sponsors]);
+		for (const spotlight of spotlights) {
+			const preload = new window.Image();
+			preload.src = spotlight.imageUrl;
+		}
+	}, [sponsors, spotlights]);
+
+	useEffect(() => {
+		if (spotlights.length === 0) return undefined;
+
+		const showNextSpotlight = () => {
+			if (livePriorityRef.current) return;
+
+			setFeaturedTakeover((current) => {
+				if (current) return current;
+
+				const spotlight = spotlights[spotlightIndexRef.current % spotlights.length];
+				spotlightIndexRef.current = (spotlightIndexRef.current + 1) % spotlights.length;
+
+				return {
+					sponsor: {
+						name: spotlight.title,
+						featuredImageUrl: spotlight.imageUrl,
+						takeoverAlt: `Uitlichting: ${spotlight.title}`,
+					},
+					exiting: false,
+				};
+			});
+		};
+
+		const interval = window.setInterval(showNextSpotlight, SPOTLIGHT_INTERVAL_MS);
+		return () => window.clearInterval(interval);
+	}, [spotlights]);
 
 	useEffect(() => {
 		const syncGames = async () => {
@@ -1014,6 +1048,33 @@ export default function OutdoorGames() {
 
 		syncTrainingSessions();
 		const refreshInterval = window.setInterval(syncTrainingSessions, REFRESH_INTERVAL_MS);
+
+		return () => {
+			isActive = false;
+			window.clearInterval(refreshInterval);
+		};
+	}, []);
+
+	useEffect(() => {
+		let isActive = true;
+
+		const syncSpotlights = async () => {
+			try {
+				const response = await fetch("/api/spotlights");
+				if (!response.ok) throw new Error(`Failed to fetch spotlights: ${response.status}`);
+
+				const data = await response.json();
+				if (isActive) {
+					setSpotlights(Array.isArray(data?.spotlights) ? data.spotlights : []);
+				}
+			} catch (error) {
+				console.error("Failed to fetch outdoor spotlights", error);
+				if (isActive) setSpotlights([]);
+			}
+		};
+
+		syncSpotlights();
+		const refreshInterval = window.setInterval(syncSpotlights, 15 * 60 * 1000);
 
 		return () => {
 			isActive = false;

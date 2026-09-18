@@ -17,14 +17,19 @@ export default async function handler(req, res) {
 				const filename = pathname.split("/").pop()?.replace(/[^a-zA-Z0-9._-]/g, "-") || "logo";
 				const isLogo = pathname === `sponsors/${filename}`;
 				const isFeaturedImage = pathname === `sponsors/featured/${filename}`;
-				if (!isLogo && !isFeaturedImage) throw new Error("Ongeldig uploadpad");
+				const isSpotlight = pathname === `spotlights/${filename}`;
+				if (!isLogo && !isFeaturedImage && !isSpotlight) throw new Error("Ongeldig uploadpad");
 
 				return {
 					allowedContentTypes: ["image/jpeg", "image/png", "image/webp"],
 					maximumSizeInBytes: 4 * 1024 * 1024,
 					addRandomSuffix: true,
 					tokenPayload: JSON.stringify({
-						kind: isFeaturedImage ? "sponsor-featured-image" : "sponsor-logo",
+						kind: isSpotlight
+							? "spotlight-image"
+							: isFeaturedImage
+								? "sponsor-featured-image"
+								: "sponsor-logo",
 					}),
 				};
 			},
@@ -33,7 +38,7 @@ export default async function handler(req, res) {
 
 		return res.status(200).json(response);
 	} catch (error) {
-		console.error("Sponsorlogo uploaden is mislukt", error);
+		console.error("Afbeelding uploaden is mislukt", error);
 		return res.status(400).json({ error: error.message || "Upload mislukt" });
 	}
 }
