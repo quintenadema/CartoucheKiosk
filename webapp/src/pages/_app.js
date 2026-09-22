@@ -1,6 +1,9 @@
 import "@/styles/globals.css";
 import { Roboto_Condensed } from "next/font/google";
 import Script from "next/script";
+import { useEffect } from "react";
+import { useRouter } from "next/router";
+import { startDeploymentRefresh } from "@/lib/deployment-refresh";
 
 const robotoCondensed = Roboto_Condensed({
   subsets: ["latin"],
@@ -8,6 +11,15 @@ const robotoCondensed = Roboto_Condensed({
 });
 
 export default function App({ Component, pageProps }) {
+  const { pathname } = useRouter();
+  useEffect(() => {
+    if (pathname !== "/outdoor" || process.env.NODE_ENV !== "production") return;
+    return startDeploymentRefresh({
+      currentVersion: process.env.NEXT_PUBLIC_DEPLOYMENT_VERSION,
+      fetchVersion: (...args) => window.fetch(...args),
+      reload: () => window.location.reload(),
+    });
+  }, [pathname]);
   return (
     <>
       <div className={robotoCondensed.className}>

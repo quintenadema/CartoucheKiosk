@@ -184,3 +184,6 @@ Controleer na deployment de Build Logs en Runtime Logs in Vercel. Roll back via 
 - [Neon serverless driver](https://neon.com/docs/serverless/serverless-driver)
 - [Vercel Blob client uploads](https://vercel.com/docs/vercel-blob/client-upload)
 - [Vercel environment variables](https://vercel.com/docs/environment-variables)
+# Automatic kiosk updates
+
+Every production deployment embeds a unique build version, exposed as uncached JSON at `/version` (also `/api/version`). The `/outdoor` screen checks it every five minutes and reloads once when it differs from its loaded build. Failed, offline, or malformed responses leave the screen running and are retried next time. Admin pages are not auto-reloaded. This updates website code, not the Pi operating system. An already-open screen needs one initial refresh to install this checker.
