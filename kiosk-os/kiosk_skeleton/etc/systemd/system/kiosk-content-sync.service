@@ -8,5 +8,5 @@ ConditionPathExists=/etc/kiosk-content-sync.env
 Type=oneshot
 EnvironmentFile=/etc/kiosk-content-sync.env
 ExecStart=/usr/bin/kiosk-content-sync
-TimeoutStartSec=90
+TimeoutStartSec=240
 Nice=10

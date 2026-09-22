@@ -129,14 +129,19 @@ Op `/outdoor` pauzeert de horizontale carrousel wanneer een uitgelichte sponsor 
 
 ## Uitlichtingen
 
+De bestaande `kiosk-content-sync`-timer op de Pi levert ook de openbare sponsorpagina aan `/api/sponsor-source`, beveiligd met `CLUB_CONTENT_SYNC_TOKEN`. Bij een geblokkeerde directe bronaanvraag gebruikt de sponsorsync dit snapshot, mits het minder dan 24 uur oud is. Een nieuwe relay-upload probeert een mislukte sync opnieuw; de aan/uit-instelling en 12-uursinterval blijven gelden. Migratie `009-sponsor-source.sql` bewaart het snapshot. Zonder verse bron blijft de bestaande sponsorlijst behouden.
+
 Via `/beheer/uitlichtingen` kan een beheerder losse clubfoto's uploaden zonder daar een sponsor aan te koppelen. Actieve uitlichtingen verschijnen op `/outdoor` op volgorde, ongeveer eens per vijf minuten. Elke foto gebruikt dezelfde bijna schermvullende animatie als een uitgelichte sponsor, blijft 10 seconden staan en maakt altijd plaats voor live wedstrijdmomenten.
 
 ## Testen en bouwen
 
 ```bash
+bun run test
 bun run lint
 bun run build
 ```
+
+`tests/sponsor-sync.test.js` test de synchronisatieservice met geïsoleerde database-, HTTP- en Blob-doubles. De regressies dekken onder andere HTTP 403/429/500, time-outs, ongeldige broninhoud, logofouten, planningsvoorwaarden en behoud van lokale zichtbaarheid/highlight-kolommen. De tests schrijven niet naar productie. Een geslaagde test bewijst niet dat de clubsite vanuit Vercel bereikbaar is: controleer daarvoor een echte productie-uitvoering en `last_success_at` in `sponsor_sync_settings`.
 
 Controleer vóór deployment minimaal:
 

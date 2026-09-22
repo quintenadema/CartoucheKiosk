@@ -15,6 +15,20 @@ def fetch(url):
             raise ValueError('Club source too large')
         return body.decode('utf-8')
 
+def publish_sponsors():
+    payload = json.dumps({'html': fetch(BASE + '/sponsoren')}).encode()
+    request = urllib.request.Request('https://cartouche.ademagroup.com/api/sponsor-source',
+        data=payload, method='POST', headers={'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + os.environ['CLUB_CONTENT_SYNC_TOKEN']})
+    with urllib.request.urlopen(request, timeout=125) as response:
+        print('Sponsors: ' + response.read(4096).decode())
+
+try:
+    publish_sponsors()
+except Exception as error:
+    # A sponsor failure must not prevent news/agenda from refreshing.
+    print('Sponsor relay failed: ' + str(error), flush=True)
+
 payload = json.dumps({'news': json.loads(fetch(NEWS)), 'agendaHtml': fetch(BASE + '/')}).encode()
 request = urllib.request.Request('https://cartouche-kiosk.vercel.app/api/club-content',
     data=payload, method='POST', headers={'Content-Type': 'application/json',

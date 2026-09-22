@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "bun test tests",
     "db:migrate": "bun --env-file=.env.local scripts/migrate.mjs",
 		"admin:create": "bun --env-file=.env.local scripts/create-admin.mjs",
 		"admin:password": "bun --env-file=.env.local scripts/set-admin-password.mjs",

@@ -116,8 +116,8 @@ function detectImageType(bytes, declaredType) {
 	return null;
 }
 
-async function mirrorLogo(sponsor) {
-	const response = await fetch(sponsor.imageUrl, {
+async function mirrorLogo(sponsor, fetchSource = fetch, upload = put) {
+	const response = await fetchSource(sponsor.imageUrl, {
 		headers: { "User-Agent": "Mozilla/5.0 (compatible; CartoucheKioskSponsorSync/1.0)" },
 		signal: AbortSignal.timeout(15_000),
 	});
@@ -133,7 +133,7 @@ async function mirrorLogo(sponsor) {
 	);
 	if (!contentType) throw new Error(`Logo van ${sponsor.name} is geen herkenbare afbeelding`);
 
-	return put(
+	return upload(
 		`sponsors/imported/${safeFilename(sponsor.name, contentType)}`,
 		imageBytes,
 		{
@@ -189,8 +189,13 @@ export async function setSponsorSyncEnabled(enabled) {
 	}
 }
 
-export async function syncSponsorsFromClubSite({ force = false } = {}) {
-	const pool = createPool();
+export async function syncSponsorsFromClubSite({ force = false } = {}, dependencies = {}) {
+	// Explicit dependencies let regression tests exercise the real sync flow
+	// without touching the club site, production database, or Blob store.
+	const pool = (dependencies.createPool ?? createPool)();
+	const fetchSource = dependencies.fetch ?? fetch;
+	const upload = dependencies.put ?? put;
+	const removeBlob = dependencies.del ?? del;
 	const client = await pool.connect();
 	let locked = false;
 
@@ -221,15 +226,25 @@ export async function syncSponsorsFromClubSite({ force = false } = {}) {
 			 WHERE id = 'club-site'`
 		);
 
-		const sourceResponse = await fetch(SPONSOR_SOURCE_URL, {
-			headers: { "User-Agent": "Mozilla/5.0 (compatible; CartoucheKioskSponsorSync/1.0)" },
-			signal: AbortSignal.timeout(20_000),
-		});
-		if (!sourceResponse.ok) throw new Error(`Clubsite gaf status ${sourceResponse.status}`);
+		let sourceSponsors;
+		try {
+			const sourceResponse = await fetchSource(SPONSOR_SOURCE_URL, {
+				headers: { "User-Agent": "Mozilla/5.0 (compatible; CartoucheKioskSponsorSync/1.0)" },
+				signal: AbortSignal.timeout(20_000),
+			});
+			if (!sourceResponse.ok) throw new Error(`Clubsite gaf status ${sourceResponse.status}`);
 
-		const sourceSponsors = parseClubSponsors(await sourceResponse.text());
-		if (sourceSponsors.length === 0) {
-			throw new Error("Geen sponsoren op de clubsite gevonden; synchronisatie afgebroken");
+			sourceSponsors = parseClubSponsors(await sourceResponse.text());
+			if (sourceSponsors.length === 0) {
+				throw new Error("Geen sponsoren op de clubsite gevonden; synchronisatie afgebroken");
+			}
+		} catch (sourceError) {
+			// The club site blocks Vercel's outbound IPs. The authenticated kiosk
+			// relay supplies the same public page; never reconcile an old snapshot.
+			const snapshot = await client.query(`SELECT html FROM sponsor_source_snapshot
+				WHERE id = 'club-site' AND updated_at > NOW() - INTERVAL '24 hours'`);
+			sourceSponsors = parseClubSponsors(snapshot.rows[0]?.html ?? "");
+			if (!sourceSponsors.length) throw sourceError;
 		}
 
 		const existingResult = await client.query(
@@ -261,7 +276,7 @@ export async function syncSponsorsFromClubSite({ force = false } = {}) {
 			if (existing) claimedExistingIds.add(existing.id);
 
 			if (!existing) {
-				const blob = await mirrorLogo(sponsor);
+				const blob = await mirrorLogo(sponsor, fetchSource, upload);
 				await client.query(
 					`INSERT INTO sponsors (
 						name, image_url, blob_pathname, website_url, sort_order, active,
@@ -288,7 +303,7 @@ export async function syncSponsorsFromClubSite({ force = false } = {}) {
 			let nextBlobPathname = existing.blob_pathname;
 
 			if (logoChanged) {
-				const blob = await mirrorLogo(sponsor);
+				const blob = await mirrorLogo(sponsor, fetchSource, upload);
 				nextImageUrl = blob.url;
 				nextBlobPathname = blob.pathname;
 				oldBlobPathnames.push(existing.blob_pathname);
@@ -344,7 +359,7 @@ export async function syncSponsorsFromClubSite({ force = false } = {}) {
 
 		await Promise.all(
 			oldBlobPathnames.map((pathname) =>
-				del(pathname).catch((error) =>
+				removeBlob(pathname).catch((error) =>
 					console.error("Oud gesynchroniseerd sponsorlogo verwijderen is mislukt", error)
 				)
 			)
