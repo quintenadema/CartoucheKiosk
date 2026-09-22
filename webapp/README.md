@@ -11,7 +11,7 @@ De webapp verzorgt de wedstrijd- en sponsorweergave voor de schermen van HC Cart
 | `/sponsors` | Doorlopende sponsorcarrousel | Publiek, kioskweergave |
 | `/login` | Login met het gezamenlijke clubwachtwoord | Publiek formulier |
 | `/` | Verwijst door naar `/beheer/sponsoren` | Alleen toegestane beheerders |
-| `/beheer/sponsoren` | Sponsoren toevoegen, aanpassen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
+| `/beheer/sponsoren` | Sponsoren synchroniseren, toevoegen, verbergen en uitlichten | Alleen toegestane beheerders |
 | `/beheer/uitlichtingen` | Schermvullende clubfoto's toevoegen, ordenen, verbergen en verwijderen | Alleen toegestane beheerders |
 | `/beheer/trainingsschema` | Het wekelijkse trainingsschema per veld en veldhelft beheren | Alleen toegestane beheerders |
 
@@ -64,6 +64,7 @@ De SQL-bestanden in `migrations/` zijn idempotent en bevatten:
 - `004-featured-sponsors.sql`: uitgelichte status en de URL en het Blob-pad van de uitgelichte foto;
 - `005-training-sessions.sql`: wekelijkse trainingen, veldhelften, seizoen en zichtbaarheid.
 - `007-spotlights.sql`: onafhankelijke schermvullende clubuitlichtingen, volgorde en zichtbaarheid.
+- `008-sponsor-sync.sql`: bronkoppeling, zachte verwijdering en status van de automatische sponsorsynchronisatie.
 
 Nieuwe of lege Neon-database voorbereiden:
 
@@ -116,13 +117,13 @@ Het wachtwoord wordt verborgen ingevoerd, uitsluitend als Better Auth-hash opges
 Een beheerder kan in `/beheer/sponsoren`:
 
 - een PNG-, JPG- of WebP-logo van maximaal 4 MB uploaden;
-- sponsornaam en optionele website instellen;
-- de sorteervolgorde bepalen;
+- automatische synchronisatie met `hc-cartouche.nl/sponsoren` aan- of uitzetten;
 - een sponsor tijdelijk verbergen zonder gegevens te verwijderen;
-- een sponsor als `Uitgelicht` markeren en daarvoor een liggende foto uploaden;
-- een sponsor definitief verwijderen.
+- een sponsor direct als `Uitgelicht` markeren en bij de eerste keer een liggende foto uploaden.
 
 Uploads gaan rechtstreeks van de browser naar Vercel Blob met een kortlevend uploadtoken. Dat token wordt alleen afgegeven na een geldige beheerderssessie. Bij vervangen of verwijderen ruimt de API het oude Blob-object op.
+
+Wanneer synchronisatie aanstaat, roept Vercel Cron iedere 12 uur `/api/cron/sponsor-sync` aan. Naam, logo, website en volgorde volgen de clubsite; de lokale zichtbaarheid en highlight-instelling blijven behouden. Een sponsor die van de clubsite verdwijnt wordt zacht verborgen, zodat die instellingen terugkomen wanneer de sponsor later weer wordt geplaatst. De cronroute vereist `CRON_SECRET`.
 
 Op `/outdoor` pauzeert de horizontale carrousel wanneer een uitgelichte sponsor het midden van het scherm bereikt. De uitgelichte foto zoomt dan naar een bijna schermvullende takeover, blijft 10 seconden zichtbaar en zoomt daarna terug. De carrousel hervat vervolgens automatisch. Alleen actieve sponsors met zowel `featured = true` als een geldige uitgelichte foto kunnen deze takeover starten.
 
@@ -141,7 +142,8 @@ Controleer vóór deployment minimaal:
 
 - login en logout via `/login` en `/beheer/sponsoren`;
 - toevoegen, wijzigen, verbergen en verwijderen in `/beheer/trainingsschema`;
-- sponsor toevoegen, aanpassen, verbergen en verwijderen;
+- sponsorsynchronisatie aan- en uitzetten en controleren dat bronupdates lokale zichtbaarheid/highlights bewaren;
+- sponsor handmatig toevoegen en verbergen;
 - `Uitgelicht` aanzetten, een foto uploaden en de 10-seconden-takeover op `/outdoor` controleren;
 - weergave op `/sponsors` zonder beheerderssessie;
 - `/indoor` en `/outdoor` op de resoluties van de echte schermen.

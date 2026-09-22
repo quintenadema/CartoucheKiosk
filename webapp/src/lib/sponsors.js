@@ -14,6 +14,8 @@ function mapSponsor(row) {
 		featured: row.featured,
 		featuredImageUrl: row.featured_image_url,
 		featuredBlobPathname: row.featured_blob_pathname,
+		syncSourceKey: row.sync_source_key,
+		syncPresent: row.sync_present,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -24,15 +26,18 @@ export async function listSponsors({ includeInactive = false } = {}) {
 	const rows = includeInactive
 		? await sql`
 			SELECT id, name, image_url, blob_pathname, website_url, sort_order, active,
-				featured, featured_image_url, featured_blob_pathname, created_at, updated_at
+				featured, featured_image_url, featured_blob_pathname, sync_source_key,
+				sync_present, created_at, updated_at
 			FROM sponsors
+			WHERE sync_present = true
 			ORDER BY sort_order ASC, name ASC
 		`
 		: await sql`
 			SELECT id, name, image_url, blob_pathname, website_url, sort_order, active,
-				featured, featured_image_url, featured_blob_pathname, created_at, updated_at
+				featured, featured_image_url, featured_blob_pathname, sync_source_key,
+				sync_present, created_at, updated_at
 			FROM sponsors
-			WHERE active = true
+			WHERE active = true AND sync_present = true
 			ORDER BY sort_order ASC, name ASC
 		`;
 
@@ -51,7 +56,8 @@ export async function createSponsor(input) {
 			${input.featured}, ${input.featuredImageUrl}, ${input.featuredBlobPathname}
 		)
 		RETURNING id, name, image_url, blob_pathname, website_url, sort_order, active,
-			featured, featured_image_url, featured_blob_pathname, created_at, updated_at
+			featured, featured_image_url, featured_blob_pathname, sync_source_key,
+			sync_present, created_at, updated_at
 	`;
 
 	return mapSponsor(row);
@@ -73,7 +79,8 @@ export async function updateSponsor(id, input) {
 			updated_at = NOW()
 		WHERE id = ${id}
 		RETURNING id, name, image_url, blob_pathname, website_url, sort_order, active,
-			featured, featured_image_url, featured_blob_pathname, created_at, updated_at
+			featured, featured_image_url, featured_blob_pathname, sync_source_key,
+			sync_present, created_at, updated_at
 	`;
 
 	return row ? mapSponsor(row) : null;
