@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { visibleHistoryActions } from "@/lib/live-history";
+export { sortActionsChronologically, visibleHistoryActions } from "@/lib/live-history";
 import {
 	Bug,
 	Flag,
@@ -12,7 +14,6 @@ import {
 export const LIVE_POLL_INTERVAL_MS = 12_000;
 export const LIVE_EVENT_DURATION_MS = 10_900;
 
-const HIDDEN_HISTORY_TYPES = new Set(["submit", "time-travel"]);
 
 function eventMinute(action) {
 	if (!Number.isFinite(action?.seconds_since_start)) return "—";
@@ -27,20 +28,6 @@ function cardColor(actionType) {
 
 export function isActionableLiveEvent(action) {
 	return action?.action === "goal" || action?.action === "card";
-}
-
-export function sortActionsChronologically(actions) {
-	return [...(actions ?? [])].sort((left, right) => {
-		const secondsDifference =
-			(left.seconds_since_start ?? 0) - (right.seconds_since_start ?? 0);
-		return secondsDifference || (left.id ?? 0) - (right.id ?? 0);
-	});
-}
-
-export function visibleHistoryActions(actions) {
-	return sortActionsChronologically(actions)
-		.filter((action) => !HIDDEN_HISTORY_TYPES.has(action.action_type))
-		.reverse();
 }
 
 function getActionCopy(action) {
@@ -62,6 +49,7 @@ function getActionCopy(action) {
 		end: "Einde wedstrijd",
 		"start-period": "Nieuwe periode",
 		"end-period": "Einde periode",
+		"period-change": "Periodewissel",
 		pause: "Spel stilgelegd",
 		resume: "Spel hervat",
 		"start-shootout": "Shoot-outs begonnen",
