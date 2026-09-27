@@ -1,4 +1,5 @@
 import Image from "next/image";
+import HistoryEventMarker from "@/components/history-event-marker";
 import { visibleHistoryActions } from "@/lib/live-history";
 export { sortActionsChronologically, visibleHistoryActions } from "@/lib/live-history";
 import {
@@ -95,12 +96,7 @@ function HistoryEvent({ action, match }) {
 					<p className="truncate text-[14px] font-bold leading-none text-white">
 						{getActionCopy(action)}
 					</p>
-					{isGoal || isCard ? (
-						<span
-							className="h-2.5 w-2.5 shrink-0 rounded-sm"
-							style={{ backgroundColor: accent }}
-						/>
-					) : null}
+					<HistoryEventMarker action={action} accent={accent} />
 				</div>
 				<p className="mt-1.5 truncate text-[11px] font-medium text-white/55">
 					{action.person_name || getTeamName(match, action.side)}
