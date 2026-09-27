@@ -1,6 +1,6 @@
 import Image from "next/image";
 import HistoryEventMarker from "@/components/history-event-marker";
-import { visibleHistoryActions } from "@/lib/live-history";
+import { periodStartLabel, visibleHistoryActions } from "@/lib/live-history";
 export { sortActionsChronologically, visibleHistoryActions } from "@/lib/live-history";
 import {
 	Bug,
@@ -32,6 +32,9 @@ export function isActionableLiveEvent(action) {
 }
 
 function getActionCopy(action) {
+	if (action.action_type === "start-period" || action.action_type === "period-change") {
+		return periodStartLabel(action);
+	}
 	if (action.action === "goal") {
 		if (action.action_type === "goal-pc") return "Doelpunt uit strafcorner";
 		if (action.action_type === "goal-ps") return "Doelpunt uit strafbal";
@@ -50,7 +53,6 @@ function getActionCopy(action) {
 		end: "Einde wedstrijd",
 		"start-period": "Nieuwe periode",
 		"end-period": "Einde periode",
-		"period-change": "Periodewissel",
 		pause: "Spel stilgelegd",
 		resume: "Spel hervat",
 		"start-shootout": "Shoot-outs begonnen",

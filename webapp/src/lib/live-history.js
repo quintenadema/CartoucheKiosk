@@ -9,7 +9,20 @@ export function sortActionsChronologically(actions) {
 
 export function visibleHistoryActions(actions) {
   const rows = [];
-  for (const action of sortActionsChronologically(actions)) {
+  let quarter = null;
+  let lastPeriodStart = null;
+  for (const sourceAction of sortActionsChronologically(actions)) {
+    let action = sourceAction;
+    if (action.action_type === "start") quarter = 1;
+    if (action.action_type === "start-period" && quarter !== null) {
+      const seconds = action.seconds_since_start;
+      if (!Number.isFinite(seconds)) quarter = null;
+      else {
+        if (seconds > 0 && seconds !== lastPeriodStart) quarter++;
+        lastPeriodStart = seconds;
+        if (quarter <= 4) action = { ...action, historyQuarter: quarter };
+      }
+    }
     if (HIDDEN_HISTORY_TYPES.has(action.action_type)) continue;
     const previous = rows.at(-1);
     // Only combine adjacent boundaries at the same displayed match minute.
@@ -23,4 +36,10 @@ export function visibleHistoryActions(actions) {
     }
   }
   return rows.reverse();
+}
+
+export function periodStartLabel(action) {
+  return Number.isInteger(action.historyQuarter) && action.historyQuarter >= 1 && action.historyQuarter <= 4
+    ? `Start Q${action.historyQuarter}`
+    : "Nieuwe periode";
 }
