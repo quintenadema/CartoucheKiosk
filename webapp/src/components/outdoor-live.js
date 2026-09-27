@@ -1,5 +1,5 @@
 import Image from "next/image";
-import HistoryEventMarker from "@/components/history-event-marker";
+import HistoryTimelineRow from "@/components/history-timeline-row";
 import { periodStartLabel, visibleHistoryActions } from "@/lib/live-history";
 export { sortActionsChronologically, visibleHistoryActions } from "@/lib/live-history";
 import {
@@ -82,29 +82,8 @@ function HistoryEvent({ action, match }) {
 			: "#789487";
 
 	return (
-		<li className="relative grid grid-cols-[42px_9px_minmax(0,1fr)] gap-3 pb-4 last:pb-0">
-			<time className="pt-0.5 text-right text-[13px] font-bold tabular-nums text-white/55">
-				{eventMinute(action)}
-			</time>
-			<div className="relative flex justify-center">
-				<span
-					className="relative z-10 mt-1.5 h-[9px] w-[9px] rounded-full ring-4 ring-[#123325]"
-					style={{ backgroundColor: accent }}
-				/>
-				<span className="absolute bottom-[-16px] top-[10px] w-px bg-white/10 last:hidden" />
-			</div>
-			<div className="min-w-0 rounded-[13px] border border-white/[0.08] bg-black/10 px-3 py-2.5">
-				<div className="flex items-center justify-between gap-2">
-					<p className="truncate text-[14px] font-bold leading-none text-white">
-						{getActionCopy(action)}
-					</p>
-					<HistoryEventMarker action={action} accent={accent} />
-				</div>
-				<p className="mt-1.5 truncate text-[11px] font-medium text-white/55">
-					{action.person_name || getTeamName(match, action.side)}
-				</p>
-			</div>
-		</li>
+		<HistoryTimelineRow action={action} minute={eventMinute(action)} title={getActionCopy(action)}
+			detail={action.person_name || getTeamName(match, action.side)} accent={accent} />
 	);
 }
 
