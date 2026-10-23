@@ -1,3 +1,4 @@
+import { DATABASE_SNAPSHOT_CACHE_CONTROL } from "@/lib/database-refresh";
 import { listSpotlights } from "@/lib/spotlights";
 
 export default async function handler(req, res) {
@@ -6,12 +7,13 @@ export default async function handler(req, res) {
 		return res.status(405).json({ error: "Methode niet toegestaan" });
 	}
 
-	res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
-
 	try {
-		return res.status(200).json({ spotlights: await listSpotlights() });
+		const spotlights = await listSpotlights();
+		res.setHeader("Cache-Control", DATABASE_SNAPSHOT_CACHE_CONTROL);
+		return res.status(200).json({ spotlights });
 	} catch (error) {
 		console.error("Uitlichtingen laden is mislukt", error);
-		return res.status(200).json({ spotlights: [] });
+		res.setHeader("Cache-Control", "no-store");
+		return res.status(503).json({ error: "Uitlichtingen tijdelijk niet beschikbaar" });
 	}
 }

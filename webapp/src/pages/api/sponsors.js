@@ -1,3 +1,4 @@
+import { DATABASE_SNAPSHOT_CACHE_CONTROL } from "@/lib/database-refresh";
 import { listSponsors } from "@/lib/sponsors";
 
 export default async function handler(req, res) {
@@ -8,10 +9,11 @@ export default async function handler(req, res) {
 
 	try {
 		const sponsors = await listSponsors();
-		res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=900");
+		res.setHeader("Cache-Control", DATABASE_SNAPSHOT_CACHE_CONTROL);
 		return res.status(200).json({ sponsors, fetchedAt: new Date().toISOString() });
 	} catch (error) {
 		console.error("Sponsoren laden uit Neon is mislukt", error);
+		res.setHeader("Cache-Control", "no-store");
 		return res.status(500).json({ error: "Sponsoren konden niet worden geladen" });
 	}
 }

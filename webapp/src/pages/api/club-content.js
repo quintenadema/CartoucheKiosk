@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getSql } from "../../lib/db";
+import { DATABASE_SNAPSHOT_CACHE_CONTROL } from "../../lib/database-refresh";
 
 export const config = { api: { bodyParser: { sizeLimit: "2mb" } } };
 
@@ -8,7 +9,6 @@ const CLUB_HOME_URL = `${CLUB_BASE_URL}/`;
 const CLUB_NEWS_URL = `${CLUB_BASE_URL}/rts/collections/public/bc321c9b/runtime/collection/Nieuws/query-data?pageSize=12&pageNumber=0&query=%28%29&language=DUTCH`;
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const SOURCE_TIMEOUT_MS = 12_000;
-const RESPONSE_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
 const STORE_VERSION = 5;
 
 const clubContentStore = globalThis.__cartoucheClubContentStore?.version === STORE_VERSION
@@ -224,7 +224,7 @@ export default async function handler(request, response) {
 		return response.status(405).json({ error: "Method not allowed" });
 	}
 
-	response.setHeader("Cache-Control", RESPONSE_CACHE_CONTROL);
+	response.setHeader("Cache-Control", DATABASE_SNAPSHOT_CACHE_CONTROL);
 
 	try {
 		return response.status(200).json(await getClubContent());
