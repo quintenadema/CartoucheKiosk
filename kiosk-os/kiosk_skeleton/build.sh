@@ -126,6 +126,9 @@ systemctl disable systemd-growfs-root.service || true
 systemctl disable systemd-rfkill.service || true
 systemctl disable systemd-rfkill.socket || true
 systemctl disable systemd-timesyncd.service || true
+# ntpdate.service owns clock sync. The if-up hook raced it at boot and could step
+# the clock forward twice (once per run), leaving TLS and Tailscale broken.
+rm -f /etc/network/if-up.d/ntpsec-ntpdate
 systemctl disable tailscaled.service || true
 
 systemctl enable kiosk-ssh-keys
@@ -140,6 +143,7 @@ systemctl enable kiosk-diagnostics
 systemctl enable kiosk-content-sync.timer
 systemctl enable kiosk-tv.timer
 systemctl enable ntpdate
+systemctl enable ntpdate.timer
 systemctl enable lightdm
 systemctl enable nginx
 systemctl enable ssh

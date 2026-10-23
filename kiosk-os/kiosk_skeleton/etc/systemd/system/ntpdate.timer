@@ -1,0 +1,10 @@
+[Unit]
+Description=Resynchronise the clock every hour
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Unit=ntpdate.service
+
+[Install]
+WantedBy=timers.target

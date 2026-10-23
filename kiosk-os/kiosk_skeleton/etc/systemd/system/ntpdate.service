@@ -9,7 +9,7 @@ StartLimitBurst=100
 
 [Service]
 Type=oneshot
-ExecStart=ntpdate ptbtime2.ptb.de ptbtime3.ptb.de
+ExecStart=flock /run/lock/ntpsec-ntpdate ntpdate ptbtime2.ptb.de ptbtime3.ptb.de
 Restart=on-failure
 RestartSec=5s
 
