@@ -1,9 +1,11 @@
 [Unit]
-Description=Refresh club news and agenda every fifteen minutes
+Description=Refresh club news, agenda and sponsors every hour
 
 [Timer]
 OnBootSec=120
-OnUnitActiveSec=15min
+# On the hour, so the database wakes once together with the kiosks' hourly
+# refresh (webapp/src/lib/database-refresh.js) and Neon's free quota lasts.
+OnCalendar=hourly
 Unit=kiosk-content-sync.service
 
 [Install]

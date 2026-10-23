@@ -4,6 +4,7 @@ import { format, isSameDay, isToday, setDefaultOptions } from "date-fns";
 import { nl } from "date-fns/locale";
 import { CalendarDays, CircleOff, Newspaper } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { setHourlyDatabaseRefresh } from "@/lib/database-refresh";
 import {
 	DebugControls,
 	isActionableLiveEvent,
@@ -1047,11 +1048,11 @@ export default function OutdoorGames() {
 		};
 
 		syncTrainingSessions();
-		const refreshInterval = window.setInterval(syncTrainingSessions, REFRESH_INTERVAL_MS);
+		const stopRefresh = setHourlyDatabaseRefresh(syncTrainingSessions);
 
 		return () => {
 			isActive = false;
-			window.clearInterval(refreshInterval);
+			stopRefresh();
 		};
 	}, []);
 
@@ -1068,17 +1069,17 @@ export default function OutdoorGames() {
 					setSpotlights(Array.isArray(data?.spotlights) ? data.spotlights : []);
 				}
 			} catch (error) {
+				// Keep the last successful spotlights.
 				console.error("Failed to fetch outdoor spotlights", error);
-				if (isActive) setSpotlights([]);
 			}
 		};
 
 		syncSpotlights();
-		const refreshInterval = window.setInterval(syncSpotlights, 15 * 60 * 1000);
+		const stopRefresh = setHourlyDatabaseRefresh(syncSpotlights);
 
 		return () => {
 			isActive = false;
-			window.clearInterval(refreshInterval);
+			stopRefresh();
 		};
 	}, []);
 
@@ -1159,11 +1160,11 @@ export default function OutdoorGames() {
 		};
 
 		syncClubContent();
-		const refreshInterval = window.setInterval(syncClubContent, 15 * 60 * 1000);
+		const stopRefresh = setHourlyDatabaseRefresh(syncClubContent);
 
 		return () => {
 			isActive = false;
-			window.clearInterval(refreshInterval);
+			stopRefresh();
 		};
 	}, []);
 
@@ -1180,17 +1181,17 @@ export default function OutdoorGames() {
 					setSponsors(Array.isArray(data?.sponsors) ? data.sponsors : []);
 				}
 			} catch (error) {
+				// Keep the last successful sponsors.
 				console.error("Failed to fetch outdoor sponsors", error);
-				if (isActive) setSponsors([]);
 			}
 		};
 
 		syncSponsors();
-		const refreshInterval = window.setInterval(syncSponsors, 15 * 60 * 1000);
+		const stopRefresh = setHourlyDatabaseRefresh(syncSponsors);
 
 		return () => {
 			isActive = false;
-			window.clearInterval(refreshInterval);
+			stopRefresh();
 		};
 	}, []);
 

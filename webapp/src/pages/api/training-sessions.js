@@ -1,3 +1,4 @@
+import { DATABASE_SNAPSHOT_CACHE_CONTROL } from "@/lib/database-refresh";
 import { listTrainingSessions } from "@/lib/training-sessions";
 
 export default async function handler(req, res) {
@@ -6,14 +7,13 @@ export default async function handler(req, res) {
 		return res.status(405).json({ error: "Methode niet toegestaan" });
 	}
 
-	res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
-
 	try {
-		return res.status(200).json({
-			sessions: await listTrainingSessions({ currentSeasonOnly: true }),
-		});
+		const sessions = await listTrainingSessions({ currentSeasonOnly: true });
+		res.setHeader("Cache-Control", DATABASE_SNAPSHOT_CACHE_CONTROL);
+		return res.status(200).json({ sessions });
 	} catch (error) {
 		console.error("Publiek trainingsschema laden is mislukt", error);
-		return res.status(200).json({ sessions: [] });
+		res.setHeader("Cache-Control", "no-store");
+		return res.status(503).json({ error: "Trainingsschema tijdelijk niet beschikbaar" });
 	}
 }

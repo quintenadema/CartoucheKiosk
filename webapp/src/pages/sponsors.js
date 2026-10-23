@@ -1,5 +1,6 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
+import { setHourlyDatabaseRefresh } from "@/lib/database-refresh";
 
 function SponsorTrack({ sponsors, durationInSeconds, reverse = false }) {
 	const marqueeSponsors = [...sponsors, ...sponsors];
@@ -43,6 +44,7 @@ export default function SponsorsPage() {
 
 	useEffect(() => {
 		let isActive = true;
+		let hasSponsors = false;
 
 		const fetchSponsors = async () => {
 			try {
@@ -58,7 +60,9 @@ export default function SponsorsPage() {
 					return;
 				}
 
-				setSponsors(Array.isArray(data?.sponsors) ? data.sponsors : []);
+				const nextSponsors = Array.isArray(data?.sponsors) ? data.sponsors : [];
+				hasSponsors = nextSponsors.length > 0;
+				setSponsors(nextSponsors);
 				setHasError(false);
 			} catch (error) {
 				console.error("Failed to load sponsors", error);
@@ -67,8 +71,8 @@ export default function SponsorsPage() {
 					return;
 				}
 
-				setSponsors([]);
-				setHasError(true);
+				// Keep showing the last successful sponsors; only show the error without any.
+				if (!hasSponsors) setHasError(true);
 			} finally {
 				if (isActive) {
 					setLoading(false);
@@ -77,11 +81,11 @@ export default function SponsorsPage() {
 		};
 
 		fetchSponsors();
-		const interval = setInterval(fetchSponsors, 15 * 60 * 1000);
+		const stopRefresh = setHourlyDatabaseRefresh(fetchSponsors);
 
 		return () => {
 			isActive = false;
-			clearInterval(interval);
+			stopRefresh();
 		};
 	}, []);
 
