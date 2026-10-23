@@ -297,7 +297,9 @@ do
 		fi
 	fi
 
-	if [ -z "${USER_DATA_DIR}" ] && [ "${SECTION}" != "browser" ]
+	# Chromium only opens a DevTools port (used by kiosk-browser-watchdog) for a
+	# non-default profile, so every instance gets its own profile directory.
+	if [ -z "${USER_DATA_DIR}" ]
 	then
 		USER_DATA_DIR="/tmp/chromium-profile-${INSTANCE_INDEX}"
 	fi
@@ -344,6 +346,8 @@ do
 			 --touch-events=enabled \
 			 --process-per-site \
 			 --no-memcheck \
+			 --remote-debugging-address=127.0.0.1 \
+			 --remote-debugging-port=$((9221 + INSTANCE_INDEX)) \
 			 ${CHROME_DARK_MODE_FLAGS} \
 			 ${CHROME_GPU_FLAGS} \
 			 ${CHROME_LOW_END_FLAGS} \

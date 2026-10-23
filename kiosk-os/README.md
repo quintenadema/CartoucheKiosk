@@ -402,6 +402,17 @@ Whenever the heartbeat stops (for whatever reason), the device will first restar
 > [!IMPORTANT]
 > De Cartouche-pagina draait extern via HTTPS en verstuurt geen heartbeat naar de lokale HTTP-endpoint. Daarom staat `[watchdog] enabled=0` in de Cartouche-configuratie. Schakel deze watchdog pas in wanneer de getoonde pagina aantoonbaar periodiek `http://localhost/heartbeat.php` kan bereiken; zonder heartbeat wordt het netwerk iedere `timeout` seconden herstart en de Pi na `timeout_reboot` seconden gereboot.
 
+## Browser-watchdog (Cartouche)
+
+`kiosk-browser-watchdog` bewaakt de browser zonder medewerking van de website. Elke Chromium-instantie krijgt een DevTools-poort die alleen lokaal luistert (`127.0.0.1:9222` voor de eerste instantie, `9223` voor de tweede, enzovoort). Elke `interval` seconden voert de watchdog in iedere pagina een kleine JavaScript-expressie uit:
+
+- reageert de pagina niet (gecrashte of vastgelopen renderer, het "Aw, Snap!"-scherm), dan wordt hij herladen; na `failures_before_restart` mislukte controles wordt `lightdm` (de hele browsersessie) herstart;
+- toont Chromium een foutpagina, bijvoorbeeld tijdens een netwerkstoring, dan wordt de pagina alleen herladen, zonder sessieherstart;
+- blijft het beschikbare geheugen onder `min_memory_mb`, dan worden de pagina's herladen om gelekt geheugen vrij te geven; helpt dat twee keer niet, dan volgt een sessieherstart;
+- op `daily_restart` (standaard 05:00, terwijl de tv in standby staat) wordt de sessie preventief herstart.
+
+Instellingen staan in `[browser_watchdog]` in `kioskbrowser.ini`. Logs: `journalctl -u kiosk-browser-watchdog`.
+
 ## Local webserver
 AnotterKiosk ships with an nginx webserver and a PHP runtime by default (which is used internally for the heartbeat mechanism).  
 Users can create a folder called `www-public` on the FAT32 partition and put custom HTML or PHP scripts there.  

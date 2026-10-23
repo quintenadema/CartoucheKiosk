@@ -1,0 +1,260 @@
+#!/usr/bin/python3
+"""Recover crashed, hung or errored kiosk pages via the Chromium DevTools port.
+
+Every check evaluates a tiny expression in each page. A page that does not
+answer (renderer crashed or hung, e.g. "Aw, Snap!") or that shows a Chromium
+error page is reloaded. If reloading does not help, or the browser itself
+stops answering, lightdm is restarted. Low memory triggers a reload to drop
+leaked renderer memory, and an optional daily restart resets everything.
+"""
+import base64
+import datetime
+import json
+import os
+import socket
+import struct
+import subprocess
+import sys
+import time
+import urllib.request
+import zoneinfo
+
+CONFIG_FILE = '/boot/firmware/kioskbrowser.ini'
+FIRST_PORT = 9222
+MAX_INSTANCES = 8
+
+
+def log(message):
+    print(message, flush=True)
+
+
+def ini(section, name, default=''):
+    result = subprocess.run(['get-ini', CONFIG_FILE, section, name, default],
+                            capture_output=True, text=True)
+    return result.stdout.strip() or default
+
+
+class DevTools:
+    """Minimal WebSocket client, just enough for single CDP request/response pairs."""
+
+    def __init__(self, url, timeout):
+        rest = url.split('://', 1)[1]
+        hostport, path = rest.split('/', 1)
+        host, port = hostport.rsplit(':', 1)
+        self.sock = socket.create_connection((host, int(port)), timeout=timeout)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.sock.sendall((f'GET /{path} HTTP/1.1\r\nHost: {hostport}\r\n'
+                           'Upgrade: websocket\r\nConnection: Upgrade\r\n'
+                           f'Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n').encode())
+        response = b''
+        while b'\r\n\r\n' not in response:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise ConnectionError('DevTools closed the handshake')
+            response += chunk
+        if b' 101 ' not in response.split(b'\r\n', 1)[0]:
+            raise ConnectionError(response.split(b'\r\n', 1)[0].decode(errors='replace'))
+        self.buffer = response.split(b'\r\n\r\n', 1)[1]
+        self.next_id = 0
+
+    def close(self):
+        self.sock.close()
+
+    def _read(self, size):
+        while len(self.buffer) < size:
+            chunk = self.sock.recv(65536)
+            if not chunk:
+                raise ConnectionError('DevTools connection closed')
+            self.buffer += chunk
+        data, self.buffer = self.buffer[:size], self.buffer[size:]
+        return data
+
+    def _send(self, text):
+        payload = text.encode()
+        header = bytes([0x81])
+        if len(payload) < 126:
+            header += bytes([0x80 | len(payload)])
+        elif len(payload) < 65536:
+            header += bytes([0x80 | 126]) + struct.pack('>H', len(payload))
+        else:
+            header += bytes([0x80 | 127]) + struct.pack('>Q', len(payload))
+        mask = os.urandom(4)
+        self.sock.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+    def _receive(self):
+        message = b''
+        while True:
+            first, second = self._read(2)
+            size = second & 0x7f
+            if size == 126:
+                size = struct.unpack('>H', self._read(2))[0]
+            elif size == 127:
+                size = struct.unpack('>Q', self._read(8))[0]
+            data = self._read(size)
+            opcode = first & 0x0f
+            if opcode == 0x8:
+                raise ConnectionError('DevTools closed the connection')
+            if opcode in (0x0, 0x1):
+                message += data
+                if first & 0x80:
+                    return json.loads(message)
+
+    def call(self, method, params=None):
+        self.next_id += 1
+        self._send(json.dumps({'id': self.next_id, 'method': method, 'params': params or {}}))
+        while True:
+            message = self._receive()
+            if message.get('id') == self.next_id:
+                if 'error' in message:
+                    raise RuntimeError(message['error'].get('message', 'DevTools error'))
+                return message.get('result', {})
+
+
+def page_targets(port):
+    with urllib.request.urlopen(f'http://127.0.0.1:{port}/json/list', timeout=5) as response:
+        return [t for t in json.load(response) if t.get('type') == 'page']
+
+
+def page_state(target, timeout):
+    """'ok', 'error_page' (Chromium network error page) or 'unresponsive' (crashed or hung renderer)."""
+    if target.get('url', '').startswith('chrome-error://'):
+        return 'error_page'
+    try:
+        client = DevTools(target['webSocketDebuggerUrl'], timeout)
+        try:
+            result = client.call('Runtime.evaluate', {'expression': 'location.href', 'returnByValue': True})
+        finally:
+            client.close()
+    except (OSError, ValueError, RuntimeError, KeyError):
+        return 'unresponsive'
+    if 'exceptionDetails' in result:
+        return 'unresponsive'
+    href = result.get('result', {}).get('value', '')
+    return 'error_page' if str(href).startswith('chrome-error://') else 'ok'
+
+
+def reload(target, timeout):
+    try:
+        client = DevTools(target['webSocketDebuggerUrl'], timeout)
+        try:
+            client.call('Page.reload', {'ignoreCache': True})
+        finally:
+            client.close()
+        return True
+    except (OSError, ValueError, RuntimeError) as error:
+        log(f'Reload of {target.get("url")} failed: {error}')
+        return False
+
+
+def memory_available_mb():
+    with open('/proc/meminfo') as meminfo:
+        for line in meminfo:
+            if line.startswith('MemAvailable:'):
+                return int(line.split()[1]) // 1024
+    return None
+
+
+def restart_browser(reason):
+    log(f'Restarting lightdm: {reason}')
+    subprocess.run(['systemctl', 'restart', 'lightdm'])
+
+
+def main():
+    if ini('browser_watchdog', 'enabled', '1') != '1':
+        log('Browser watchdog disabled in kioskbrowser.ini')
+        return
+    interval = int(ini('browser_watchdog', 'interval', '30'))
+    timeout = int(ini('browser_watchdog', 'timeout', '15'))
+    failures_before_restart = int(ini('browser_watchdog', 'failures_before_restart', '4'))
+    min_memory_mb = int(ini('browser_watchdog', 'min_memory_mb', '60'))
+    daily_restart = ini('browser_watchdog', 'daily_restart', '')
+    timezone = zoneinfo.ZoneInfo(ini('general', 'timezone', 'Europe/Amsterdam'))
+    startup_grace = int(ini('browser_watchdog', 'startup_grace', '120'))
+
+    failures = {}
+    low_memory_checks = 0
+    low_memory_reloads = 0
+    started = time.monotonic()
+    today = datetime.datetime.now(timezone)
+    # Count today's restart as done only once its time has passed, so a boot before it still gets one.
+    last_daily_restart = today.date() if today.strftime('%H:%M') >= daily_restart else today.date() - datetime.timedelta(days=1)
+
+    time.sleep(startup_grace)
+    while True:
+        now = datetime.datetime.now(timezone)
+        if daily_restart and now.date() != last_daily_restart and now.strftime('%H:%M') >= daily_restart:
+            last_daily_restart = now.date()
+            restart_browser(f'daily restart at {daily_restart}')
+            failures.clear()
+            started = time.monotonic()
+            time.sleep(startup_grace)
+            continue
+
+        reachable = 0
+        for port in range(FIRST_PORT, FIRST_PORT + MAX_INSTANCES):
+            try:
+                targets = page_targets(port)
+            except OSError:
+                continue
+            reachable += 1
+            for target in targets:
+                key = (port, target['id'])
+                state = page_state(target, timeout)
+                if state == 'ok':
+                    failures.pop(key, None)
+                    continue
+                if state == 'error_page':
+                    # Usually a network outage: retrying the page is all that helps.
+                    log(f'Error page on port {port}, reloading')
+                    reload(target, timeout)
+                    continue
+                failures[key] = failures.get(key, 0) + 1
+                log(f'Page on port {port} not responding ({failures[key]}x): {target.get("url")}')
+                if failures[key] >= failures_before_restart:
+                    restart_browser(f'page on port {port} did not recover after reloading')
+                    failures.clear()
+                    started = time.monotonic()
+                    time.sleep(startup_grace)
+                    break
+                reload(target, timeout)
+            else:
+                continue
+            break
+
+        if reachable == 0 and time.monotonic() - started > startup_grace:
+            failures['browser'] = failures.get('browser', 0) + 1
+            log(f'No browser DevTools port answering ({failures["browser"]}x)')
+            if failures['browser'] >= failures_before_restart:
+                restart_browser('browser not answering on any DevTools port')
+                failures.clear()
+                started = time.monotonic()
+        else:
+            failures.pop('browser', None)
+
+        available = memory_available_mb()
+        low_memory_checks = low_memory_checks + 1 if available is not None and available < min_memory_mb else 0
+        if low_memory_checks == 0:
+            low_memory_reloads = 0
+        elif low_memory_checks >= 3:
+            low_memory_checks = 0
+            if low_memory_reloads >= 2:
+                restart_browser(f'only {available} MB memory available after reloading')
+                low_memory_reloads = 0
+                failures.clear()
+                started = time.monotonic()
+                time.sleep(startup_grace)
+                continue
+            low_memory_reloads += 1
+            log(f'Only {available} MB memory available, reloading pages to release it')
+            for port in range(FIRST_PORT, FIRST_PORT + MAX_INSTANCES):
+                try:
+                    for target in page_targets(port):
+                        reload(target, timeout)
+                except OSError:
+                    continue
+
+        time.sleep(interval)
+
+
+if __name__ == '__main__':
+    sys.exit(main())
